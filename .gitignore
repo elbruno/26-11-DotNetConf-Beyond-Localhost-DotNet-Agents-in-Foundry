@@ -1,0 +1,9 @@
+# Purpose: Keep local runtime, identity and build artifacts out of audience sources.
+**/bin/
+**/obj/
+**/.azure/
+**/.foundry/
+**/.env
+**/.env.*
+.vs/
+.vscode/
