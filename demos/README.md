@@ -15,14 +15,17 @@ The SDK pin is .NET 10.0.403 with patch roll-forward. Package versions and depen
 
 ## Real model prerequisites
 
-Use an existing authorized Foundry project and a deployed model. In PowerShell, set the following values in the current terminal only:
+Use an existing authorized Foundry project and a deployed model. From the bundle root in **PowerShell 7**, run the interactive helper in the terminal you will use for the demos:
 
 ```powershell
-$env:FOUNDRY_PROJECT_ENDPOINT = 'https://<account>.services.ai.azure.com/api/projects/<project>'
-$env:AZURE_AI_MODEL_DEPLOYMENT_NAME = '<existing-model-deployment-name>'
+& .\demos\Set-DemoEnvironment.ps1
 ```
 
-Both programs require these values. There is no implicit model fallback. `DefaultAzureCredential` selects the authorized local or hosted identity. Sign in separately using your approved Azure identity workflow; do not put credentials in source files or commit `.azure`, `.env` or local settings.
+Enter real values only in your own terminal, never in Copilot or recorded capture. All configuration inputs are masked. The helper validates every required input before changing anything and never prints or writes entered values to files. It configures `FOUNDRY_PROJECT_ENDPOINT` and `AZURE_AI_MODEL_DEPLOYMENT_NAME` for both programs, with no implicit model fallback.
+
+Choose **1** to preserve the existing `DefaultAzureCredential` chain without changing any credential variables. This does not force Azure CLI authentication: existing environment credentials can take precedence over CLI sign-in. Choose **2** to supply `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` and `AZURE_CLIENT_SECRET` for a service principal. Use the existing tenant/application GUIDs and the secret **value**, not its identifier. This option sets those three variables but does not clear other credential settings. Selectors such as `AZURE_TOKEN_CREDENTIALS` may restrict which credentials run. Neither choice authenticates, grants access or verifies the identity; perform any approved sign-in separately. API-key authentication is not used by these programs.
+
+The helper changes only the **current PowerShell process**, never User/Machine environment settings. Use `&` as shown, not `pwsh -File`, which configures a short-lived child process. Child processes such as `dotnet` and `azd` inherit the values. Run the helper separately in any other terminal that needs the configuration; already-open terminals do not inherit later changes. Process environment values are plaintext, not an encrypted credential store. Close configured terminals when finished, avoid environment dumps/transcripts, and do not put credentials in source files or commit `.azure`, `.env` or local settings.
 
 From `demos`, run Demo 1:
 
