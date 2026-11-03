@@ -42,7 +42,7 @@ In another terminal in that same directory:
 azd ai agent invoke --local "Hello! Tell me a fun fact about .NET."
 ```
 
-The local host is for development only. Do not expose port 8088 publicly. A listening HTTP process or successful health request does not prove model inference, conversation persistence or cloud deployment.
+The local host is for development only. The installed AgentServer SDK uses `ListenAnyIP` on port 8088, so it binds all network interfaces and may be reachable from the LAN, not just localhost. Use a controlled recording network with existing inbound firewall protection, no public exposure and no tunnels. Review that protection before running; these instructions do not change operating-system/firewall settings. `ASPNETCORE_URLS` alone does not override this SDK listener. Stop the host when finished and never treat it as a production authentication boundary. A listening HTTP process or successful readiness request does not prove model inference, conversation persistence or cloud deployment.
 
 ## Hosting version boundary
 
