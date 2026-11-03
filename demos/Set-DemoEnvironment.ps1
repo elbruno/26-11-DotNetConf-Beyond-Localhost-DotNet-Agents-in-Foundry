@@ -3,7 +3,8 @@
 Purpose: Prompt for the configuration shared by both Beyond Localhost demos.
 Run with & .\demos\Set-DemoEnvironment.ps1 in the PowerShell terminal used for demos.
 Expected result: validated process environment values, with no files or sign-in.
-Inputs are masked. Process environment values are plaintext, not a credential store.
+Endpoint/model inputs are visible; service-principal inputs are masked.
+Process environment values are plaintext, not a credential store.
 #>
 [CmdletBinding()]
 param()
@@ -26,15 +27,20 @@ function Read-MaskedValue([string]$Prompt) {
 }
 
 Write-Host 'Configure both demos in this terminal only. No sign-in or model call is performed.'
-Write-Host '1: Keep the existing DefaultAzureCredential chain (no credential variables changed)'
-Write-Host '2: Supply a service principal through Azure Identity environment variables'
+Write-Host 'The local console uses AzureCliCredential only; use your separately approved Azure CLI sign-in.'
+Write-Host 'The deployable host uses DefaultAzureCredential. Its optional configuration follows:'
+Write-Host '1: Keep existing credential variables (also sufficient for the local console)'
+Write-Host '2: Supply service-principal variables for the deployable host, not the CLI-only console'
 $choice = Read-Host -Prompt 'Choose 1 or 2'
 if ($choice -notin @('1', '2')) { throw 'Invalid authentication choice. Enter 1 or 2. Nothing was changed.' }
 
 # Collect and validate everything before changing the process environment.
 $pending = @{}
-$pending.FOUNDRY_PROJECT_ENDPOINT = Read-MaskedValue 'Foundry project endpoint (hidden)'
-$pending.AZURE_AI_MODEL_DEPLOYMENT_NAME = Read-MaskedValue 'Existing model deployment name (hidden)'
+$pending.FOUNDRY_PROJECT_ENDPOINT = Read-Host -Prompt 'Foundry project endpoint'
+$pending.AZURE_AI_MODEL_DEPLOYMENT_NAME = Read-Host -Prompt 'Existing model deployment name [gpt-6-luna]'
+if ($pending.AZURE_AI_MODEL_DEPLOYMENT_NAME -eq '') {
+    $pending.AZURE_AI_MODEL_DEPLOYMENT_NAME = 'gpt-6-luna'
+}
 $endpoint = $null
 if ($pending.FOUNDRY_PROJECT_ENDPOINT -match '[\s\p{Cc}]' -or
     -not [Uri]::TryCreate($pending.FOUNDRY_PROJECT_ENDPOINT, [UriKind]::Absolute, [ref]$endpoint) -or
@@ -64,9 +70,9 @@ if ($choice -eq '2') {
     }
 }
 
-Write-Warning 'DefaultAzureCredential behavior is unchanged. Existing environment credentials can take precedence over CLI sign-in; credential selectors such as AZURE_TOKEN_CREDENTIALS may restrict the chain. Other credential variables are preserved, not cleared.'
+Write-Warning 'For the deployable host, DefaultAzureCredential may prefer environment credentials over CLI sign-in; AZURE_TOKEN_CREDENTIALS may restrict the chain. Other credential variables are preserved, not cleared. The CLI-only console does not use this chain or the supplied service-principal variables.'
 if ($choice -eq '1') {
-    Write-Host 'Existing credential variables remain unchanged. This choice does not force CLI authentication.'
+    Write-Host 'Existing credential variables remain unchanged. This choice does not force CLI authentication in the deployable host.'
 }
 else {
     Write-Host 'The service principal will be available to EnvironmentCredential. Access and credential-chain selection still require separate verification.'
@@ -92,6 +98,7 @@ finally {
     $previous.Clear()
 }
 
-Write-Host 'Configuration set for both demos in this process only. No entered values were printed or saved.'
+Write-Host 'Configuration set for both demos in this process only. Endpoint/model input was visible; no secret values were printed and no entered values were saved to files.'
+Write-Host 'The default model name is a suggestion, not verification that the deployment exists.'
 Write-Host 'Child processes inherit these plaintext values. Configure each separate terminal independently.'
 Write-Host 'Do not use pwsh -File for this helper: that configures a child process which then exits.'

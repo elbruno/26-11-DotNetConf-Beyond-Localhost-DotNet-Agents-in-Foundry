@@ -1,5 +1,5 @@
 // Purpose: Run one concrete Agent Framework request from the terminal.
-// Requires a Foundry project, a model deployment, and an authorized Azure identity.
+// Requires a Foundry project, a model deployment, and an authorized Azure CLI sign-in.
 // Expected result: a real model-generated .NET fact, not a local or canned response.
 using Azure.AI.Projects;
 using Azure.Identity;
@@ -12,7 +12,7 @@ var deployment = Environment.GetEnvironmentVariable("AZURE_AI_MODEL_DEPLOYMENT_N
     ?? throw new InvalidOperationException("Set AZURE_AI_MODEL_DEPLOYMENT_NAME before running.");
 
 // Step 2: Give the model a name and a small, easy-to-explain instruction.
-AIAgent agent = new AIProjectClient(projectEndpoint, new DefaultAzureCredential())
+AIAgent agent = new AIProjectClient(projectEndpoint, new AzureCliCredential())
     .AsAIAgent(
         model: deployment,
         instructions: "You are a friendly assistant. Keep your answers brief.",

@@ -4,8 +4,8 @@ Two concrete stages of the same HelloAgent, following [the primary article](http
 
 | Demo | Entry point | What changes |
 |---|---|---|
-| 1 | `01-console-agent\Program.cs` | One model request, printed to the terminal |
-| 2 | `02-hosted-agent\Program.cs` | The same agent exposed through the Responses protocol |
+| 1 | `01-console-agent\Program.cs` | One model request using AzureCliCredential, printed to the terminal |
+| 2 | `02-hosted-agent\Program.cs` | The same agent behavior exposed through Responses, using DefaultAzureCredential |
 
 ## Build without a model call
 
@@ -21,11 +21,13 @@ Use an existing authorized Foundry project and a deployed model. From the bundle
 & .\demos\Set-DemoEnvironment.ps1
 ```
 
-Enter real values only in your own terminal, never in Copilot or recorded capture. All configuration inputs are masked. The helper validates every required input before changing anything and never prints or writes entered values to files. It configures `FOUNDRY_PROJECT_ENDPOINT` and `AZURE_AI_MODEL_DEPLOYMENT_NAME` for both programs, with no implicit model fallback.
+Enter real values only in your own terminal, never in Copilot. The endpoint and model deployment prompts are visible. Press Enter at the model prompt to use **gpt-6-luna**, or enter another valid existing deployment name. This is a suggested name, not evidence that the deployment exists in your project. There is no default endpoint and neither program has an implicit fallback if its environment variable is missing. Service-principal inputs, including the actual client secret, remain masked. The helper validates every required input before changing anything and never writes entered values to files or prints secret values. It configures `FOUNDRY_PROJECT_ENDPOINT` and `AZURE_AI_MODEL_DEPLOYMENT_NAME` for both programs.
 
-Choose **1** to preserve the existing `DefaultAzureCredential` chain without changing any credential variables. This does not force Azure CLI authentication: existing environment credentials can take precedence over CLI sign-in. Choose **2** to supply `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` and `AZURE_CLIENT_SECRET` for a service principal. Use the existing tenant/application GUIDs and the secret **value**, not its identifier. This option sets those three variables but does not clear other credential settings. Selectors such as `AZURE_TOKEN_CREDENTIALS` may restrict which credentials run. Neither choice authenticates, grants access or verifies the identity; perform any approved sign-in separately. API-key authentication is not used by these programs.
+The local-only console explicitly uses **AzureCliCredential**, with no fallback to another credential. It requires your separately approved Azure CLI sign-in and does not use service-principal environment variables or the DefaultAzureCredential selector. The deployable host explicitly retains **DefaultAzureCredential**, including when you run that deployable example locally.
 
-The helper changes only the **current PowerShell process**, never User/Machine environment settings. Use `&` as shown, not `pwsh -File`, which configures a short-lived child process. Child processes such as `dotnet` and `azd` inherit the values. Run the helper separately in any other terminal that needs the configuration; already-open terminals do not inherit later changes. Process environment values are plaintext, not an encrypted credential store. Close configured terminals when finished, avoid environment dumps/transcripts, and do not put credentials in source files or commit `.azure`, `.env` or local settings.
+Choose **1** to leave all existing credential variables unchanged. This is sufficient setup for the CLI-only console; it does not force the deployable host to use Azure CLI. For that host, existing environment credentials can take precedence over CLI sign-in. Choose **2** to supply `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` and `AZURE_CLIENT_SECRET` for its service principal. Use the existing tenant/application GUIDs and the secret **value**, not its identifier. This option sets those three variables but does not clear other credential settings, and it does not configure the console's Azure CLI identity. Selectors such as `AZURE_TOKEN_CREDENTIALS` may restrict the host's credential chain. Neither choice authenticates, grants access or verifies which identity the host selects; perform any approved sign-in separately. API-key authentication is not used by these programs. See [Azure Identity credential chains](https://learn.microsoft.com/dotnet/azure/sdk/authentication/credential-chains).
+
+The helper changes only the **current PowerShell process**, never User/Machine environment settings or the working directory. Use `&` as shown, not `pwsh -File`, which configures a short-lived child process. Child processes such as `dotnet` and `azd` inherit the values. Run the helper separately in any other terminal that needs the configuration; already-open terminals do not inherit later changes. Process environment values are plaintext, not an encrypted credential store. Close configured terminals when finished, avoid environment dumps/transcripts, and do not put credentials in source files or commit `.azure`, `.env` or local settings. Endpoint/model values may be shown, but keep secret entry and unrelated private identity/path information outside capture.
 
 From `demos`, run Demo 1:
 
