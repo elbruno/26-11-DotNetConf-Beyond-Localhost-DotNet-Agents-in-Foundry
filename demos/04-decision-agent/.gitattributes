@@ -1,2 +1,3 @@
-# Preserve the exact published upstream bytes, including dependency lock files.
+# Preserve the pinned upstream sample and license bytes on every checkout.
 * -text
+.gitattributes text eol=lf
