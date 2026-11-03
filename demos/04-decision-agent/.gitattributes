@@ -1,0 +1,2 @@
+# Preserve the exact published upstream bytes, including dependency lock files.
+* -text
