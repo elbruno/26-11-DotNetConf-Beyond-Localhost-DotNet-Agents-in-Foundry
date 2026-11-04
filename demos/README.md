@@ -1,106 +1,98 @@
-# Beyond Localhost demos
+# Beyond Localhost: five demos
 
-Four independent teaching stages. The main narrative follows [From dotnet run to Foundry Hosted Agent in 3 lines of C#](https://devblogs.microsoft.com/dotnet/from-dotnet-run-to-foundry-hosted-agent-in-3-lines-of-csharp/).
+The sequence separates **where agent code runs** from **where its model runs**. There is no Ollama dependency in this active narrative. All model calls target existing authorized Foundry deployments.
 
-| Stage | Folder | Provider and identity |
-|---|---|---|
-| 01 | `01-console-agent` | Foundry model, explicit AzureCliCredential |
-| 02 | `02-aspire-local-agent` | Existing local Ollama chat model under Aspire, no Foundry SDK/backend or cloud credential |
-| 03 | `03-foundry-hosted-agent` | Foundry Responses host, DefaultAzureCredential |
-| 04 | `04-decision-agent` | Exact public decision-routing sample, AzureCliCredential locally and ManagedIdentityCredential in Foundry |
+| Demo | Agent runtime | Model and identity | Preparation status |
+|---|---|---|---|
+| 01 `01-console-agent` | Simple MAF console | Foundry chat model, AzureCliCredential | Built, inference unverified |
+| 02 `02-host-ready-agent` | Same behavior, local Responses host, not deployed | Same chat model, DefaultAzureCredential | Built, not deployed |
+| 03 `03-foundry-hosted-agent` | Same host source intended for deployment in Foundry | Same chat model, DefaultAzureCredential | Deployment-ready source only, deployment/inference unverified |
+| 04 `04-local-decision-agent` | Local MAF console, no HTTP host | Foundry Microsoft-Decision-1, AzureCliCredential | Built, inference unverified |
+| 05 `05-foundry-hosted-decision-agent` | Same decision logic in Foundry Responses host | Same decision deployment, managed identity when hosted | Exact public sample, deployment/inference unverified |
 
-These are source/build-ready stages, not proof of live inference or cloud deployment. Stage 02 still requires an installed chat-capable model. Decision-only Ollama models cannot substitute for one. No model or image is downloaded automatically.
+Stages 02 and 03 have byte-identical host source, lock and manifest: the intended change is deployment, not agent behavior. Demo 04 compiles the exact `SupportRoutingAgent.cs` and contracts from Demo 05 through linked source/project references, avoiding divergent routing logic. Keep the whole audience bundle together; Demo 04 is not a standalone-folder export. Model deployment and hosted-agent deployment are distinct. Folder names do not prove cloud resources exist.
 
-## Preparation without inference
+## Build without authentication or inference
 
-From the bundle root in PowerShell 7:
+PowerShell 7 from the bundle root:
 
 ```powershell
 pwsh -File .\Prepare-Demos.ps1
 ```
 
-This restores locked dependencies and builds all four stages, including the decision caller/tests. It does not start Aspire, authenticate, install software, download models, invoke inference or deploy. Aspire's AppHost is compiled and its graph evaluated separately when you start it. The SDK pin is .NET 10.0.403 with patch roll-forward. Stage 02 uses Microsoft.Agents.AI 1.27.0 and OllamaSharp 5.5.0. Stages 01/03 retain their existing Foundry package pins; stage 04 deliberately retains its upstream versions.
+Locked restore/build uses SDK 10.0.403 with patch roll-forward. It builds all five stages, including Demo 05's contracts, caller and tests. No tool/model/image installation, authentication, inference, provision or deployment occurs. Stages 01/02/03 retain their existing preview hosting pins; Demo 04 uses MAF 1.22.0, Azure.Identity 1.21.0 and Decisions.Foundry 0.6.3 to match Demo 05's logic. Demo 05 retains the exact upstream pins rather than upgrading to the chat host version.
 
-## 01: the standalone Foundry-backed agent
+## Chat configuration for Demos 01 to 03
 
-In the terminal you will use for stages 01 and 03, run:
+In the terminal you will use for the programs:
 
 ```powershell
 & .\demos\Set-DemoEnvironment.ps1
+```
+
+The unchanged helper asks only for the visible Foundry project endpoint and model deployment. Blank model input selects `gpt-6-luna`, or supply a valid existing deployment. No endpoint is hardcoded and the helper does not establish that the model exists. It validates both inputs before setting only process `FOUNDRY_PROJECT_ENDPOINT` and `AZURE_AI_MODEL_DEPLOYMENT_NAME`.
+
+There is no credential UI, read/set/clear of credential variables, login or file persistence. Enter real values in your own terminal, never Copilot. Use `&`, not `pwsh -File`, which configures a child process that exits. Configure every separate terminal independently. Child processes inherit plaintext environment values; they are not an encrypted credential store. No User/Machine environment or working directory is changed.
+
+Demo 01 uses AzureCliCredential explicitly with no fallback and requires separately approved Azure CLI sign-in and model/project access:
+
+```powershell
 dotnet run --project .\demos\01-console-agent\ConsoleAgent.csproj
 ```
 
-The helper asks only for the visible project endpoint and model deployment name. Blank model input selects `gpt-6-luna`, or supply a valid existing deployment name. This is a suggested name, not evidence that the deployment exists. There is no default endpoint or implicit fallback in either program. Both inputs are validated before the helper sets only `FOUNDRY_PROJECT_ENDPOINT` and `AZURE_AI_MODEL_DEPLOYMENT_NAME`.
+Demo 02 uses DefaultAzureCredential, as does identical deployment-stage Demo 03. Existing environment credentials can precede CLI sign-in, and existing AZURE_TOKEN_CREDENTIALS may filter the chain. The helper does not inspect/change these settings or guarantee an identity. See [credential chains](https://learn.microsoft.com/en-us/dotnet/azure/sdk/authentication/credential-chains).
 
-The helper does not ask for, read, set, clear or print credentials, authenticate or write inputs to files. Use `&` as shown, not `pwsh -File`, which configures a short-lived child process. Values belong to the current process and its future children; configure another terminal separately. Process environment values are plaintext, not an encrypted credential store. No User/Machine environment or working directory is changed. Enter actual values locally, never in Copilot.
-
-The local-only console uses AzureCliCredential directly, with no silent fallback. It requires your separately approved Azure CLI sign-in and appropriate project/model access. No sign-in is performed by preparation.
-
-## 02: a local agent under Aspire, without Foundry
-
-Requirements: installed Aspire CLI 13.6.4, an already-running local Ollama service and an already-installed **chat-capable** model. For example, `qwen3:0.6b` is a possible small model prerequisite, not a model this bundle installs or has live-verified. Confirm its license, availability and capabilities separately. Do not select a decision-only model for this chat example.
-
-In the PowerShell terminal that starts Aspire, set your existing service URL and installed model:
-
-```powershell
-$env:OLLAMA_ENDPOINT = 'http://localhost:11434'
-$env:OLLAMA_MODEL_NAME = '<already-installed-chat-model>'
-aspire start --apphost .\demos\02-aspire-local-agent\apphost.cs --isolated --non-interactive
-```
-
-Aspire declares an external service and passes its reference into `OLLAMA_ENDPOINT`. It does not create another Ollama server, container or model, pull an image, download a model or define Azure infrastructure. The agent accepts only an HTTP(S) loopback endpoint. It uses OllamaSharp's IChatClient with the actual Agent Framework agent, retaining HelloAgent's brief instructions and one-shot .NET-fact prompt.
-
-The `local-agent` resource is intentionally **explicit-start**, so opening the dashboard does not invoke a model. After separately authorizing and preparing live local inference, start that resource from the dashboard. It runs once and exits. Do not start it during build/graph-only checks. `aspire describe --apphost ...` reports actual state; `NotStarted` does not mean model readiness. An external service entry is not a model-capability check.
-
-Stop only this AppHost when finished:
-
-```powershell
-aspire stop --apphost .\demos\02-aspire-local-agent\apphost.cs --non-interactive
-```
-
-Keep the Ollama API local and controlled; this example does not add authentication to it. Do not tunnel it. No model inference has been verified here. A synthetic loopback HTTP fixture exercises the real provider path, not model quality or a live daemon.
-
-Reference: [official Agent Framework Ollama integration](https://learn.microsoft.com/agent-framework/integrations/by-component/model-providers/ollama).
-
-## 03: the Foundry-host-ready agent
-
-The name, instructions and model story match stage 01. The teaching diff contains the three host registrations plus the deliberate identity difference: the deployable example uses DefaultAzureCredential, including when run locally. Existing environment credentials can precede CLI sign-in and credential selectors may restrict that chain. The helper does not inspect or change those settings. See [credential chains](https://learn.microsoft.com/dotnet/azure/sdk/authentication/credential-chains).
-
-After configuration, from `demos\03-foundry-hosted-agent`:
+After separately approved configuration, from `demos\02-host-ready-agent`:
 
 ```powershell
 azd ai agent run --no-client
 ```
 
-In another terminal in the same folder:
+In another terminal in that folder:
 
 ```powershell
 azd ai agent invoke --local "Hello! Tell me a fun fact about .NET."
 ```
 
-The installed AgentServer SDK uses `ListenAnyIP` on port 8088. It binds all interfaces and may be LAN-reachable. Use a controlled network with existing inbound firewall protection, no public exposure and no tunnels. `ASPNETCORE_URLS` alone does not override this listener. Review protection before running; no OS/firewall setting is changed here. Stop the host when finished. A readiness response from `/readiness` does not prove inference, persistence or cloud deployment.
+This is the host-ready **not deployed** stage. The three registrations plus normal build/run lifecycle expose Responses; the full difference from Demo 01 also includes identity, not literally only three lines.
 
-The hosting pin `1.27.0-preview.261030.1` requires Responses **2.0.0**. `azure.yaml` describes code runtime `dotnet_10` and the protocol, not an existing deployed environment. Current `azd ai agent init --help` prefers `--template/-t`. Initialization, project/identity selection and reviewed generated configuration precede any authorized cloud action. Preserve source before initialization. `azd provision`, `azd deploy` and `azd down` create billable resources, publish code and delete resources respectively; none is a build command or authorized by these instructions.
+The installed AgentServer uses ListenAnyIP on port 8088. It may be LAN-reachable. Use a controlled protected network, existing inbound firewall protection and no tunnels; ASPNETCORE_URLS alone does not override this listener. Stop the host when finished. `/readiness` success proves startup, not inference or cloud persistence. Local storage/resilience/telemetry are not proof of configured platform features.
 
-## 04: a decision agent without a conversational model
+Demo 03 uses the same source after separately authorized deployment. Its runtime manifest declares `dotnet_10` and Responses 2.0.0, required by hosting 1.27.0-preview.261030.1. Initialization/environment selection, quota and approved identity/project/model access precede cloud action. Current CLI help prefers `init --template/-t`. `azd provision` can bill, `azd deploy` publishes code and `azd down` deletes resources. None was run or authorized by this preparation. Do not label Demo 03 deployed until actual evidence exists.
 
-The exact MIT-licensed [public sample](https://github.com/microsoft/Generative-AI-for-beginners-dotnet/tree/00b60a8a95ad57d5ef975bb914a87f1cec76e049/samples/CoreSamples/DecisionAgent-01-FoundryHosted) is retained with its source, pins, LICENSE and THIRD-PARTY-NOTICES. Follow its README for its separate configuration:
+## Decision configuration for Demos 04 and 05
 
-- `Decision__Endpoint`: native decision resource root, not `/api/projects/...`
-- `Decision__Deployment`: existing Microsoft-Decision-1 deployment, not the chat model
+These call **Microsoft-Decision-1 deployed in Foundry**, never a local decision model or Ollama. Configure separately from the chat helper:
 
-The existing two-prompt helper is intentionally unchanged and does not configure the decision model. The sample manifest maps `DECISION_ENDPOINT` and `DECISION_DEPLOYMENT` to those runtime keys.
+```powershell
+$env:Decision__Endpoint = 'https://<resource>.services.ai.azure.com/'
+$env:Decision__Deployment = '<existing-microsoft-decision-1-deployment>'
+```
 
-This sample uses AzureCliCredential locally and ManagedIdentityCredential with the agent's system-assigned identity in Foundry, exactly as upstream. That narrow source-fidelity exception differs from stage 03's DefaultAzureCredential policy. The upstream `CreateBuilder(args)`/environment-based hosted identity selection is preserved, not introduced as a general demo pattern.
+These are illustrative placeholders, not actual user values. Endpoint is the native resource root, not the chat project's `/api/projects/...` path. Deployment is the existing decision model, not `gpt-6-luna`. Setting variables does not deploy a model or authenticate.
 
-An agent can implement rules or traditional ML without an LLM. This example specifically uses structured Microsoft-Decision-1 scoring without a chat/generative explanation call. Microsoft describes Decision-1 as built on Qwen3.5-9B, so do not claim this example has no language-model-derived component anywhere. Its answer text is deterministic and a person must confirm the route. Confidence and class probability are distinct, neither guarantees correctness.
+Demo 04 runs the real custom AIAgent in-process with AzureCliCredential:
 
-Offline checks from stage 04:
+```powershell
+dotnet run --project .\demos\04-local-decision-agent\LocalDecisionAgent.csproj
+```
+
+The fixed duplicate-charge ticket produces a structured route and deterministic recommendation text. A person must confirm. It does not update a ticketing system. Shared source accepts one nonempty text user input, max 64 KiB UTF-8, no history/system/nontext. Provider failures remain failures, not success-shaped manual-review routes.
+
+Demo 05 preserves the exact MIT [blog-linked public sample](https://github.com/microsoft/Generative-AI-for-beginners-dotnet/tree/00b60a8a95ad57d5ef975bb914a87f1cec76e049/samples/CoreSamples/DecisionAgent-01-FoundryHosted), its original source, pinned dependencies, LICENSE and THIRD-PARTY-NOTICES. Follow its README/manifest for the hosted shape; do not execute installation/login/deployment/cleanup without separate approval. It chooses AzureCliCredential locally and ManagedIdentityCredential(SystemAssigned) when hosted, as published. That narrow source-fidelity exception differs from the earlier DefaultAzureCredential preference for deployable projects; Demos 02/03 remain DefaultAzureCredential.
+
+Two identity hops matter: the caller is authorized to invoke the hosted agent; independently, the agent-instance identity needs access to the decision-model resource. The [hosted-agent token service](https://learn.microsoft.com/azure/foundry/agents/concepts/hosted-agent-token-service) supplies the current agent-instance identity through ManagedIdentityCredential, not the project managed identity. Getting a token does not grant downstream permissions. No API key, automatic RBAC/access grant or Azure CLI identity inside Foundry is assumed.
+
+Demo 05's manifest maps DECISION_ENDPOINT and DECISION_DEPLOYMENT to runtime Decision__Endpoint/Decision__Deployment. The inspected episode uses different service names and `env`/AZURE_AI_MODEL_DEPLOYMENT_NAME mappings and persists user environment/UserSecrets in its setup helper. Those are reference patterns, not adopted configuration. Do not mix manifests or replace this process-only helper with the episode's persistent setup.
+
+An agent in general can use deterministic rules or traditional ML without an LLM. This sample makes a structured Decision-1 call without a chat/generative explanation call. Microsoft describes Decision-1 as built on Qwen3.5-9B, so do not claim zero language-model-derived components in this particular example. Provider confidence and class probability are distinct, neither guarantees correctness.
+
+Offline checks from Demo 05:
 
 ```powershell
 dotnet test .\tests\SupportRoutingAgent.Tests -c Release --no-restore
 ```
 
-All 26 original tests use fake decisions/HTTP/credentials and loopback Responses hosting. They prove neither real inference nor cloud identity permissions. No model, RBAC or deployment operation was executed. Do not follow upstream installation/login/deployment/cleanup commands without separate approval.
+All 26 original tests use fake decisions/HTTP/credentials and loopback Responses hosting. They test the exact logic shared by Demo 04 and the host/caller contracts, not actual cloud inference, model accuracy, permission sufficiency or deployment. Historical success documented by an external sample is not newly verified success for this bundle.
 
-Official references: [hosting integration](https://learn.microsoft.com/agent-framework/hosting/foundry-hosted-agent?pivots=programming-language-csharp), [hosted-agent concepts](https://learn.microsoft.com/azure/foundry/agents/concepts/hosted-agents), [Decision-1 model background](https://labs.ai.azure.com/innovations/microsoft-decision-1/).
+References: [primary hosting article](https://devblogs.microsoft.com/dotnet/from-dotnet-run-to-foundry-hosted-agent-in-3-lines-of-csharp/), [Agent Framework hosting](https://learn.microsoft.com/agent-framework/hosting/foundry-hosted-agent?pivots=programming-language-csharp), [hosted-agent concepts](https://learn.microsoft.com/azure/foundry/agents/concepts/hosted-agents), [Decision-1 background](https://labs.ai.azure.com/innovations/microsoft-decision-1/).
