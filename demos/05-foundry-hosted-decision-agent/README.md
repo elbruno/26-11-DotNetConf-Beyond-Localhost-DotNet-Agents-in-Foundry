@@ -11,6 +11,14 @@ Keep the complete five-demo bundle together. Run setup once as described in
 The upstream instructions below remain reference material, not proof of a
 successful cloud invocation. Hosted native Decision access still requires
 separately approved agent-instance authorization.
+V08 uses `AzureCliCredential` locally and `DefaultAzureCredential` in Foundry.
+Changing the credential class does not grant inference permission or prove which
+identity the hosted default chain selects. This source change is not deployed.
+The source and manifest target `netconf-support-routing`. This is a new agent
+name, not a rename or new version
+of `support-routing`. Existing agents are preserved. A new named agent can have
+a different instance principal; never copy role assignments or reuse evidence of
+the old principal as proof of the new agent's access.
 The transport adds bounded 401 diagnostics for challenge, unvalidated token
 audience and expiry only. It never logs bearer tokens, other claims or ticket text.
 
@@ -86,7 +94,10 @@ Keep the four endpoints and identities distinct:
 | `AGENT_OPENAI_BASE_URL` | OpenAI-compatible base URL for the deployed Hosted Agent | C# caller |
 
 Locally, `AzureCliCredential` represents the developer. In Foundry, the agent
-uses its system-assigned managed identity for the native decision request. The
+uses `DefaultAzureCredential` for the native decision request. Verify the selected
+runtime credential and principal in the deployed environment rather than
+assuming that the chain selects the intended agent-instance identity. Never put
+developer credentials in the hosted agent to work around missing permissions. The
 C# caller uses the caller's Azure CLI identity to invoke the agent endpoint.
 An endpoint token does not itself grant permission to invoke that endpoint.
 
@@ -258,7 +269,7 @@ project endpoint or decision resource root here:
 
 ```powershell
 $env:AGENT_OPENAI_BASE_URL = 'https://<agent-endpoint-base-url>/'
-$env:AGENT_NAME = 'support-routing'
+$env:AGENT_NAME = 'netconf-support-routing'
 dotnet run --project .\src\SupportRoutingCaller -c Release -- `
     'I was charged twice for my subscription.'
 ```

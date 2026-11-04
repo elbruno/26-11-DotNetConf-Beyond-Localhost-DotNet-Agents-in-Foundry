@@ -1,4 +1,4 @@
-// Purpose: Expose HelloAgent and two read-only tools through Foundry Responses.
+// Purpose: Expose netconf-hello-agent and two read-only tools through Foundry Responses.
 // Requires the same project, deployment, and authorized identity as Demo 1.
 // Expected result: an HTTP host; a response still requires a real Foundry model call.
 using Azure.AI.AgentServer.Core;
@@ -22,7 +22,7 @@ AIAgent agent = new AIProjectClient(projectEndpoint, new DefaultAzureCredential(
             When asked to add two integers, call AddNumbers instead of calculating yourself.
             Use the tool results in your answer.
             """,
-        name: "HelloAgent",
+        name: "netconf-hello-agent",
         tools: DemoTools.Create(),
         // Instrument the inner client before MAF builds its function-invocation loop.
         clientFactory: client => client.AsBuilder()

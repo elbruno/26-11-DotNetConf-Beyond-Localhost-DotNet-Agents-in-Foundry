@@ -1,9 +1,10 @@
 /*
  * Purpose: Configure the same agent for local development and Foundry hosting.
  * 1. Read the native decision resource root and deployment from external configuration.
- * 2. Use the developer CLI credential locally and the agent's system identity in Foundry.
+ * 2. Use Azure CLI locally and DefaultAzureCredential in Foundry.
  * 3. Expose the agent through the official Responses 2.0.0 host.
  */
+using System.Runtime.CompilerServices;
 using Azure.AI.AgentServer.Core;
 using Azure.Core;
 using Azure.Identity;
@@ -11,14 +12,14 @@ using ElBruno.AI.Decisions.Foundry;
 using Microsoft.Agents.AI.Foundry.Hosting;
 using SupportRouting;
 
+[assembly: InternalsVisibleTo("SupportRoutingAgent.Tests")]
+
 var builder = AgentHost.CreateBuilder(args);
 var endpoint = DemoSettings.Read("Decision__Endpoint");
 var deployment = DemoSettings.Read("Decision__Deployment");
 
-TokenCredential credential = string.IsNullOrEmpty(
-    Environment.GetEnvironmentVariable("FOUNDRY_HOSTING_ENVIRONMENT"))
-    ? new AzureCliCredential()
-    : new ManagedIdentityCredential(ManagedIdentityId.SystemAssigned);
+TokenCredential credential = Program.CreateDecisionCredential(
+    Environment.GetEnvironmentVariable("FOUNDRY_HOSTING_ENVIRONMENT"));
 
 using var logs = LoggerFactory.Create(logging => logging.AddConsole());
 using var http = new HttpClient(new DecisionTransport(logs.CreateLogger("NativeDecision")));
@@ -36,4 +37,10 @@ builder.RegisterProtocol("responses", endpoints => endpoints.MapFoundryResponses
 var app = builder.Build();
 app.Run();
 
-public partial class Program;
+public partial class Program
+{
+    internal static TokenCredential CreateDecisionCredential(string? hostingEnvironment) =>
+        string.IsNullOrEmpty(hostingEnvironment)
+            ? new AzureCliCredential()
+            : new DefaultAzureCredential();
+}

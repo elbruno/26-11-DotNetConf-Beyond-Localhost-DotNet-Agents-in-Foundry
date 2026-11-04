@@ -9,9 +9,9 @@ There is no Ollama dependency. All model calls target existing authorized Foundr
 | 02 `02-host-ready-agent` | Same behavior, local Responses host, not deployed | Same chat model, DefaultAzureCredential |
 | 03 `03-foundry-hosted-agent` | Responses host plus two read-only function tools | Same chat model, DefaultAzureCredential |
 | 04 `04-local-decision-agent` | Local MAF console, no HTTP host | Foundry Microsoft-Decision-1, AzureCliCredential |
-| 05 `05-foundry-hosted-decision-agent` | Same decision logic in Foundry Responses host | Same native decision deployment, agent-instance managed identity |
+| 05 `05-foundry-hosted-decision-agent` | Same decision logic in Foundry Responses host | Same native decision deployment, AzureCliCredential locally, DefaultAzureCredential hosted |
 
-Stage 03 retains 02's hosting registrations, project, lock and manifest, but now
+Stage 03 retains 02's hosting registrations, project and lock, but now
 adds two in-process tools and their tracing source. Their Program.cs files are
 intentionally different; Demo 02 stays unchanged. Demo 04 links Demo 05's routing
 logic and contracts. Keep the whole bundle together. Model deployment and agent
@@ -151,8 +151,18 @@ Both chat manifests map their two runtime settings through `env`. Code deploymen
 uses `dependencyResolution: bundled`, so `azd` publishes .NET and packages the
 complete assemblies, including the linked settings helper. Local settings JSON
 is explicitly excluded from publish. No Docker/ACR or new model is needed.
-After reviewing the environment, `azd deploy hello-agent --no-prompt` creates a
-new immutable version. Do not provision a new project or alter access implicitly.
+The two hosted demo sources/manifests now use `netconf-hello-agent` and
+`netconf-support-routing`. These are the exact user-confirmed names. Demo 02's
+local-only name and manifest are unchanged, so 02 and 03 no longer have identical manifests.
+The setup helper still saves only the same four model/endpoint settings; hosted
+agent names are fixed in source/manifests, not model deployment names.
+
+After reviewing and separately authorizing deployment, `azd deploy
+netconf-hello-agent --no-prompt` targets the new named agent. It does not
+rename or replace `hello-agent:2`, and no deployment of this new name is claimed.
+Do not provision a new project or alter access implicitly. A new named agent can
+have a new instance principal; verify its actual identity and permissions rather
+than assuming old agent assignments carry over.
 
 ## Demo 04
 
@@ -182,7 +192,8 @@ The MIT [upstream sample](https://github.com/microsoft/Generative-AI-for-beginne
 retains its dependency pins, routing logic, contracts, license and notices.
 Session adaptations are documented at the top of its README: shared local
 settings loading, explicit `env` aliases supported by the installed CLI, and
-bundled .NET publishing. The remote-build source ZIP omitted sibling contracts
+bundled .NET publishing, and V08's hosted DefaultAzureCredential choice (local
+AzureCliCredential is unchanged). The remote-build source ZIP omitted sibling contracts
 and linked source; publishing first includes them without copying/rewriting
 their implementations.
 
@@ -196,19 +207,25 @@ Deployment configuration remains separate:
 
 Also set the verified AZURE_AI_PROJECT_ID and AZURE_TENANT_ID. Explicitly save
 these aliases with `azd env set` in the selected environment; do not assume the
-setup file or process values populate azd. `azd deploy support-routing
+setup file or process values populate azd. `azd deploy netconf-support-routing
 --no-prompt` publishes a version but never proves native-model permission.
 
 Two identity hops matter: caller to hosted endpoint, then current agent-instance
 identity to the native decision resource. AzureCliCredential is used locally;
-ManagedIdentityCredential(SystemAssigned) uses the hosted token service in
-Foundry, **not the project managed identity**. A token alone grants no downstream
-permission. See the [hosted-agent token service](https://learn.microsoft.com/azure/foundry/agents/concepts/hosted-agent-token-service).
+DefaultAzureCredential is used in Foundry. Verify which runtime credential and
+principal it selects; the current source choice has not been redeployed.
+The [hosted-agent token service](https://learn.microsoft.com/azure/foundry/agents/concepts/hosted-agent-token-service)
+can issue the current agent-instance identity, **not the project managed identity**.
+A token alone grants no downstream permission. Do not copy developer credentials
+into the deployed environment to bypass missing access.
 The setup script does not add roles or store keys.
 
 The optional C# caller needs AGENT_OPENAI_BASE_URL and AGENT_NAME only after an
 actual deployment. Obtain them from verified agent details, never guess them or
-substitute the model/project endpoint.
+substitute the model/project endpoint. For the new named Demo 05, verify that
+those details identify `netconf-support-routing`, not the original
+`support-routing`. The caller accepts the actual configured name and does not
+silently rewrite an old endpoint or name.
 
 ## Verification boundary
 

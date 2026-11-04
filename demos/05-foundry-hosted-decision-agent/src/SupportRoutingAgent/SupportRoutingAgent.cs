@@ -27,7 +27,7 @@ public sealed class SupportRoutingAgent(IDecisionClient decisions) : AIAgent
             ["manual-review"] = "Insufficient information, unrelated requests, or conflicting issues without a clear primary team"
         }.AsReadOnly();
 
-    public override string Name => "support-routing";
+    public override string Name => "netconf-support-routing";
     public override string Description => "Suggests a support team using a native bounded decision.";
 
     protected override async Task<AgentResponse> RunCoreAsync(

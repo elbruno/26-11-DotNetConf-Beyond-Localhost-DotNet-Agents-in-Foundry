@@ -4,6 +4,7 @@ Purpose: Save non-secret chat and Decision-1 endpoints/deployments for all five 
 Run with & .\demos\Set-DemoEnvironment.ps1 in PowerShell 7, not pwsh -File.
 Expected result: four visible settings in an ignored local JSON file and this process.
 No keys, credential variables, authentication, builds, inference or deployment.
+Hosted agent names are fixed in the manifests, not stored in these four settings.
 #>
 [CmdletBinding()]
 param()

@@ -5,7 +5,7 @@ services:
   existing-project:
     host: azure.ai.project
     endpoint: ${AZURE_AI_PROJECT_ENDPOINT}
-  support-routing:
+  netconf-support-routing:
     project: ./src/SupportRoutingAgent
     host: azure.ai.agent
     language: csharp
@@ -24,7 +24,7 @@ services:
         cpu: "0.5"
         memory: 1Gi
     kind: hosted
-    name: support-routing
+    name: netconf-support-routing
     protocols:
       - protocol: responses
         version: 2.0.0

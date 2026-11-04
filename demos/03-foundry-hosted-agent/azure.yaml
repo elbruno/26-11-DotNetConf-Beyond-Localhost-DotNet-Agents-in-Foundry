@@ -4,12 +4,12 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
 name: beyond-localhost
 services:
-  hello-agent:
+  netconf-hello-agent:
     host: azure.ai.agent
     project: .
     language: csharp
     kind: hosted
-    name: hello-agent
+    name: netconf-hello-agent
     startupCommand: dotnet run --no-launch-profile --project HostedAgent.csproj
     codeConfiguration:
       dependencyResolution: bundled
