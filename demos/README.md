@@ -12,27 +12,30 @@ The sequence separates **where agent code runs** from **where its model runs**. 
 
 Stages 02 and 03 have byte-identical host source, lock and manifest: the intended change is deployment, not agent behavior. Demo 04 compiles the exact `SupportRoutingAgent.cs` and contracts from Demo 05 through linked source/project references, avoiding divergent routing logic. Keep the whole audience bundle together; Demo 04 is not a standalone-folder export. Model deployment and hosted-agent deployment are distinct. Folder names do not prove cloud resources exist.
 
-## Build without authentication or inference
+## One configuration script for all five demos
 
-PowerShell 7 from the bundle root:
-
-```powershell
-pwsh -File .\Prepare-Demos.ps1
-```
-
-Locked restore/build uses SDK 10.0.403 with patch roll-forward. It builds all five stages, including Demo 05's contracts, caller and tests. No tool/model/image installation, authentication, inference, provision or deployment occurs. Stages 01/02/03 retain their existing preview hosting pins; Demo 04 uses MAF 1.22.0, Azure.Identity 1.21.0 and Decisions.Foundry 0.6.3 to match Demo 05's logic. Demo 05 retains the exact upstream pins rather than upgrading to the chat host version.
-
-## Chat configuration for Demos 01 to 03
-
-In the terminal you will use for the programs:
+In the PowerShell 7 terminal used for the demos, from the bundle root:
 
 ```powershell
 & .\demos\Set-DemoEnvironment.ps1
 ```
 
-The unchanged helper asks only for the visible Foundry project endpoint and model deployment. Blank model input selects `gpt-6-luna`, or supply a valid existing deployment. No endpoint is hardcoded and the helper does not establish that the model exists. It validates both inputs before setting only process `FOUNDRY_PROJECT_ENDPOINT` and `AZURE_AI_MODEL_DEPLOYMENT_NAME`.
+This script configures only four non-secret settings, using visible prompts and showing the selected values:
 
-There is no credential UI, read/set/clear of credential variables, login or file persistence. Enter real values in your own terminal, never Copilot. Use `&`, not `pwsh -File`, which configures a child process that exits. Configure every separate terminal independently. Child processes inherit plaintext environment values; they are not an encrypted credential store. No User/Machine environment or working directory is changed.
+| Setting | Meaning and blank-input behavior |
+|---|---|
+| FOUNDRY_PROJECT_ENDPOINT | Existing HTTPS chat project URL with `/api/projects/<project>` path; retain current process value if present, otherwise required |
+| AZURE_AI_MODEL_DEPLOYMENT_NAME | Existing chat deployment; retain current value, otherwise default to `gpt-6-luna` |
+| Decision__Endpoint | Existing HTTPS native Decision-1 resource root, not a project URL; retain current value if present, otherwise required |
+| Decision__Deployment | Existing Microsoft-Decision-1 deployment name; retain current value if present, otherwise required |
+
+Current values/defaults appear in brackets. Blank accepts that value; no real endpoint or decision deployment is guessed. Defaults do not prove deployments exist. All four inputs are validated before any process setting changes. Invalid input produces an explicit error and leaves all four settings unchanged.
+
+No keys, passwords or tokens are requested, stored or printed. No credential variables are read, set or cleared. No files or User/Machine environment settings are written. There is no restore, build, export, login, inference, provisioning, deployment or access change in this script. It does not change location. Use `&`, not `pwsh -File`, which configures a child process that exits. Configure every separate terminal independently. Child processes inherit the four plaintext non-secret settings.
+
+The former build/export helpers are retired from active surfaces. Build an individual project with standard `dotnet build <project> -c Release`; builds and tests remain separate from configuration. Locked dependencies use SDK 10.0.403 with patch roll-forward. Demo 04 uses MAF 1.22.0, Azure.Identity 1.21.0 and Decisions.Foundry 0.6.3 to match Demo 05's logic. Demo 05 retains exact upstream pins rather than adopting the chat host version.
+
+## Chat Demos 01 to 03
 
 Demo 01 uses AzureCliCredential explicitly with no fallback and requires separately approved Azure CLI sign-in and model/project access:
 
@@ -62,14 +65,13 @@ Demo 03 uses the same source after separately authorized deployment. Its runtime
 
 ## Decision configuration for Demos 04 and 05
 
-These call **Microsoft-Decision-1 deployed in Foundry**, never a local decision model or Ollama. Configure separately from the chat helper:
+These call **Microsoft-Decision-1 deployed in Foundry**, never a local decision model or Ollama. The same setup script above configures their separate resource-root endpoint and deployment:
 
 ```powershell
-$env:Decision__Endpoint = 'https://<resource>.services.ai.azure.com/'
-$env:Decision__Deployment = '<existing-microsoft-decision-1-deployment>'
+& .\demos\Set-DemoEnvironment.ps1
 ```
 
-These are illustrative placeholders, not actual user values. Endpoint is the native resource root, not the chat project's `/api/projects/...` path. Deployment is the existing decision model, not `gpt-6-luna`. Setting variables does not deploy a model or authenticate.
+Endpoint is the native resource root, not the chat project's `/api/projects/...` path. Deployment is the existing decision model, not `gpt-6-luna`. Setting variables does not deploy a model or authenticate.
 
 Demo 04 runs the real custom AIAgent in-process with AzureCliCredential:
 
@@ -83,7 +85,19 @@ Demo 05 preserves the exact MIT [blog-linked public sample](https://github.com/m
 
 Two identity hops matter: the caller is authorized to invoke the hosted agent; independently, the agent-instance identity needs access to the decision-model resource. The [hosted-agent token service](https://learn.microsoft.com/azure/foundry/agents/concepts/hosted-agent-token-service) supplies the current agent-instance identity through ManagedIdentityCredential, not the project managed identity. Getting a token does not grant downstream permissions. No API key, automatic RBAC/access grant or Azure CLI identity inside Foundry is assumed.
 
-Demo 05's manifest maps DECISION_ENDPOINT and DECISION_DEPLOYMENT to runtime Decision__Endpoint/Decision__Deployment. The inspected episode uses different service names and `env`/AZURE_AI_MODEL_DEPLOYMENT_NAME mappings and persists user environment/UserSecrets in its setup helper. Those are reference patterns, not adopted configuration. Do not mix manifests or replace this process-only helper with the episode's persistent setup.
+Demo 05's unchanged manifest uses AZURE_AI_PROJECT_ENDPOINT for the existing hosting project and maps DECISION_ENDPOINT/DECISION_DEPLOYMENT to runtime Decision__Endpoint/Decision__Deployment. The helper sets runtime process values only; it does not populate azd's saved environment or infer aliases. If the same project will host Demo 05, the corresponding mappings are:
+
+| Selected process setting | Demo 05 azd environment input |
+|---|---|
+| FOUNDRY_PROJECT_ENDPOINT | AZURE_AI_PROJECT_ENDPOINT |
+| Decision__Endpoint | DECISION_ENDPOINT |
+| Decision__Deployment | DECISION_DEPLOYMENT |
+
+After separately approving deployment preparation and selecting the correct azd environment, explicitly copy those same selected values with `azd env set` as described in the original sample README. If a different project will host the agent, supply that explicitly instead of assuming the chat project. Demo 03's manifest directly references FOUNDRY_PROJECT_ENDPOINT and AZURE_AI_MODEL_DEPLOYMENT_NAME; its saved azd environment must also be explicitly reviewed/configured. This is separate deployment preparation, not something the helper performs or verifies.
+
+The optional Demo 05 C# caller needs AGENT_OPENAI_BASE_URL and AGENT_NAME only after an agent has actually been deployed. Obtain them from verified deployed-agent details; do not use the project/model endpoint or guess an agent endpoint. They are not required by the setup script before deployment.
+
+The inspected episode uses different service names and `env`/AZURE_AI_MODEL_DEPLOYMENT_NAME mappings and persists user environment/UserSecrets in its setup helper. Those are reference patterns, not adopted configuration. Do not mix manifests or replace this process-only helper with the episode's persistent setup.
 
 An agent in general can use deterministic rules or traditional ML without an LLM. This sample makes a structured Decision-1 call without a chat/generative explanation call. Microsoft describes Decision-1 as built on Qwen3.5-9B, so do not claim zero language-model-derived components in this particular example. Provider confidence and class probability are distinct, neither guarantees correctness.
 
