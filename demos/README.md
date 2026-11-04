@@ -7,13 +7,15 @@ There is no Ollama dependency. All model calls target existing authorized Foundr
 |---|---|---|
 | 01 `01-console-agent` | Simple MAF console | Foundry chat model, AzureCliCredential |
 | 02 `02-host-ready-agent` | Same behavior, local Responses host, not deployed | Same chat model, DefaultAzureCredential |
-| 03 `03-foundry-hosted-agent` | Same host source deployed in Foundry | Same chat model, DefaultAzureCredential |
+| 03 `03-foundry-hosted-agent` | Responses host plus two read-only function tools | Same chat model, DefaultAzureCredential |
 | 04 `04-local-decision-agent` | Local MAF console, no HTTP host | Foundry Microsoft-Decision-1, AzureCliCredential |
 | 05 `05-foundry-hosted-decision-agent` | Same decision logic in Foundry Responses host | Same native decision deployment, agent-instance managed identity |
 
-Stages 02 and 03 have identical host source, project, lock and manifest. Demo 04
-links Demo 05's routing logic and contracts. Keep the whole bundle together.
-Model deployment and agent hosting are different operations.
+Stage 03 retains 02's hosting registrations, project, lock and manifest, but now
+adds two in-process tools and their tracing source. Their Program.cs files are
+intentionally different; Demo 02 stays unchanged. Demo 04 links Demo 05's routing
+logic and contracts. Keep the whole bundle together. Model deployment and agent
+hosting are different operations.
 
 ## Configure once, then run
 
@@ -94,9 +96,50 @@ readiness alone does not establish inference or production capabilities.
 ## Demo 03
 
 Show the deployed agent in the selected project's Foundry Agents page,
-Playground and Versions, then compare its source with Demo 02. An active version
-is registration evidence, not proof of successful model access. Use an actual
-completed response as inference evidence.
+Playground and Versions, then compare its source with Demo 02. V08 adds two
+deterministic read-only functions in `DemoTools.cs`: `GetDotNetFact()` returns a
+fixed .NET garbage-collector fact, and `AddNumbers(a, b)` returns a checked integer
+sum. They need no external service or additional credentials. Basic greetings and
+the Responses host remain available. No tool changes have been deployed by this
+revision. An older hosted version cannot demonstrate the new tools.
+
+After a separately authorized redeployment, use this exact Playground prompt:
+
+```text
+Call GetDotNetFact to get the demo's .NET fact, then call AddNumbers with a=19 and b=23. Use both tool results in a brief answer. Do not calculate the sum yourself.
+```
+
+Expected tool results: `The .NET garbage collector automatically reclaims memory
+occupied by unreachable objects.` and `42`. Final model wording can vary. For a
+single-tool demonstration, use either prompt:
+
+```text
+Call GetDotNetFact and tell me the demo's .NET fact.
+```
+
+```text
+Call AddNumbers with a=19 and b=23 and report the tool result.
+```
+
+Open **Agents > Traces** in the hosting project and find that invocation by its
+Trace ID or Response ID. Expand the tool-orchestration subtree and look for
+`execute_tool GetDotNetFact` and `execute_tool AddNumbers`, with
+`gen_ai.operation.name=execute_tool` and the matching `gen_ai.tool.name`. Tool
+spans prove execution; a fluent answer containing 42 alone does not.
+
+The pinned .NET client is instrumented with `UseOpenTelemetry` before MAF builds
+its function-invocation loop. `ConfigureTracing(...AddSource(...))` subscribes the
+AgentHost collector to the same `BeyondLocalhost.HelloAgent` ActivitySource.
+These are real SDK spans, not handwritten log messages. Raw prompt, argument and
+result capture remains disabled. Foundry trace visibility still requires a
+configured telemetry destination, linked Application Insights and existing reader
+access. No telemetry resource, content-capture setting or permissions are changed.
+Local tests/inference are not proof that a future hosted version exports traces.
+See [hosted tracing](https://learn.microsoft.com/azure/foundry/observability/quickstarts/quickstart-tracing-hosted-agent)
+and [.NET agent observability](https://learn.microsoft.com/agent-framework/agents/observability).
+
+An active version is registration evidence, not proof of successful model access
+or tool execution. Use an actual completed response and its spans as evidence.
 
 For a future separately authorized deployment, configure the selected azd
 environment explicitly. The setup JSON is **not** azd's `.azure/<env>/.env`.
