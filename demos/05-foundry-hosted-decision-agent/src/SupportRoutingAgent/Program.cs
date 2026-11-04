@@ -12,10 +12,8 @@ using Microsoft.Agents.AI.Foundry.Hosting;
 using SupportRouting;
 
 var builder = AgentHost.CreateBuilder(args);
-var endpoint = builder.Configuration["Decision:Endpoint"]
-    ?? throw new InvalidOperationException("Set Decision__Endpoint to the Foundry resource root.");
-var deployment = builder.Configuration["Decision:Deployment"]
-    ?? throw new InvalidOperationException("Set Decision__Deployment to the existing decision deployment name.");
+var endpoint = DemoSettings.Read("Decision__Endpoint");
+var deployment = DemoSettings.Read("Decision__Deployment");
 
 TokenCredential credential = string.IsNullOrEmpty(
     Environment.GetEnvironmentVariable("FOUNDRY_HOSTING_ENVIRONMENT"))

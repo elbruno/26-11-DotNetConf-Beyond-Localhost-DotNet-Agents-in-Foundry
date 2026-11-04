@@ -1,6 +1,6 @@
 # Purpose: Describe the hosted demo's code runtime and Responses v2 protocol.
-# Local use requires the two environment variables documented in demos/README.md.
-# Cloud initialization, identity, resource selection and deployment require separate approval.
+# Local use loads the saved non-secret demo settings automatically.
+# Deployment remains separate from the setup script.
 # yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
 name: beyond-localhost
 services:
@@ -12,6 +12,7 @@ services:
     name: hello-agent
     startupCommand: dotnet run --no-launch-profile --project HostedAgent.csproj
     codeConfiguration:
+      dependencyResolution: bundled
       runtime: dotnet_10
       entryPoint: HostedAgent.dll
     protocols:

@@ -16,4 +16,8 @@
     <Compile Include="..\05-foundry-hosted-decision-agent\src\SupportRoutingAgent\SupportRoutingAgent.cs" Link="SupportRoutingAgent.cs" />
     <ProjectReference Include="..\05-foundry-hosted-decision-agent\src\SupportRouting.Contracts\SupportRouting.Contracts.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\shared\DemoSettings.cs" Link="DemoSettings.cs" />
+    <None Include="..\shared\demo-settings.local.json" Link="demo-settings.local.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" Condition="Exists('..\shared\demo-settings.local.json')" />
+  </ItemGroup>
 </Project>

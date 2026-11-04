@@ -7,3 +7,8 @@
 **/.env.*
 .vs/
 .vscode/
+**/demo-settings.local.json
+**/demo-settings.local.json.tmp
+~$*
+~*.tmp
+ppt*.tmp

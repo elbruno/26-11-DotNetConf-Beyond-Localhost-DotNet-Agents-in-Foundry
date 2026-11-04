@@ -11,15 +11,12 @@ services:
     language: csharp
     uses:
       - existing-project
-    environmentVariables:
-      - name: Decision__Endpoint
-        value: ${DECISION_ENDPOINT}
-      - name: Decision__Deployment
-        value: ${DECISION_DEPLOYMENT}
-      - name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT
-        value: "false"
+    env:
+      Decision__Endpoint: ${DECISION_ENDPOINT}
+      Decision__Deployment: ${DECISION_DEPLOYMENT}
+      OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: "false"
     codeConfiguration:
-      dependencyResolution: remote_build
+      dependencyResolution: bundled
       entryPoint: SupportRoutingAgent.dll
       runtime: dotnet_10
     container:

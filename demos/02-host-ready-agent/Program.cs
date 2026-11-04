@@ -8,10 +8,8 @@ using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Foundry.Hosting;
 
 // Step 1: Keep the model configuration and agent behavior unchanged.
-var projectEndpoint = new Uri(Environment.GetEnvironmentVariable("FOUNDRY_PROJECT_ENDPOINT")
-    ?? throw new InvalidOperationException("Set FOUNDRY_PROJECT_ENDPOINT before running."));
-var deployment = Environment.GetEnvironmentVariable("AZURE_AI_MODEL_DEPLOYMENT_NAME")
-    ?? throw new InvalidOperationException("Set AZURE_AI_MODEL_DEPLOYMENT_NAME before running.");
+var projectEndpoint = new Uri(DemoSettings.Read("FOUNDRY_PROJECT_ENDPOINT"));
+var deployment = DemoSettings.Read("AZURE_AI_MODEL_DEPLOYMENT_NAME");
 
 AIAgent agent = new AIProjectClient(projectEndpoint, new DefaultAzureCredential())
     .AsAIAgent(
@@ -21,7 +19,7 @@ AIAgent agent = new AIProjectClient(projectEndpoint, new DefaultAzureCredential(
 
 // Step 2: These are the three hosting registrations from the article.
 var builder = AgentHost.CreateBuilder();
-builder.Services.AddFoundryResponses(agent);
+builder.WebApplicationBuilder.AddFoundryResponses(agent);
 builder.RegisterProtocol("responses", endpoints => endpoints.MapFoundryResponses());
 
 // Step 3: The host now owns the interaction instead of Console.WriteLine.

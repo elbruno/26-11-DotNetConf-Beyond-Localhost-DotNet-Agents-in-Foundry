@@ -6,3 +6,5 @@
 .env.*
 !.env.example
 **/appsettings.Development.json
+**/demo-settings.local.json
+**/demo-settings.local.json.tmp

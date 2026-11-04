@@ -1,5 +1,19 @@
 # DecisionAgent-01-FoundryHosted
 
+Session adaptation of the MIT upstream sample at commit
+`00b60a8a95ad57d5ef975bb914a87f1cec76e049`. Dependency pins, routing logic,
+contracts, license and notices are unchanged. The host now uses the shared
+non-secret settings loader from `..\shared`, and its project links that file.
+The manifest uses the installed CLI's `env` mapping and bundled .NET publishing:
+remote-build ZIP packaging omitted the sibling contracts and linked source.
+Keep the complete five-demo bundle together. Run setup once as described in
+[the session demo guide](../README.md); future local runs reuse the ignored JSON.
+The upstream instructions below remain reference material, not proof of a
+successful cloud invocation. Hosted native Decision access still requires
+separately approved agent-instance authorization.
+The transport adds bounded 401 diagnostics for challenge, unvalidated token
+audience and expiry only. It never logs bearer tokens, other claims or ticket text.
+
 A .NET 10 sample that routes synthetic support tickets with
 **Microsoft-Decision-1**, a native Microsoft Foundry decision model. A custom
 Microsoft Agent Framework `AIAgent` calls the model through the native
