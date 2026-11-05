@@ -15,6 +15,7 @@ namespace SupportRoutingCaller;
 public sealed class ResponsesAgentClient
 {
     private const string FoundryScope = "https://ai.azure.com/.default";
+    private const string ResponsesApiVersion = "v1";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly HttpClient _httpClient;
@@ -41,7 +42,7 @@ public sealed class ResponsesAgentClient
 
         _httpClient = httpClient;
         _credential = credential;
-        _responsesEndpoint = new Uri($"{agentOpenAiBaseUrl.AbsoluteUri.TrimEnd('/')}/responses");
+        _responsesEndpoint = CreateResponsesEndpoint(agentOpenAiBaseUrl);
         _agentName = agentName;
     }
 
@@ -117,5 +118,27 @@ public sealed class ResponsesAgentClient
         }
 
         throw new InvalidDataException("The completed Foundry response did not contain output text.");
+    }
+
+    private static Uri CreateResponsesEndpoint(Uri agentOpenAiBaseUrl)
+    {
+        var endpoint = new UriBuilder(agentOpenAiBaseUrl)
+        {
+            Path = $"{agentOpenAiBaseUrl.AbsolutePath.TrimEnd('/')}/responses"
+        };
+        var queryParameters = agentOpenAiBaseUrl.Query
+            .TrimStart('?')
+            .Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .Where(parameter =>
+                !string.Equals(
+                    Uri.UnescapeDataString(parameter.Split('=', 2)[0]),
+                    "api-version",
+                    StringComparison.OrdinalIgnoreCase));
+
+        endpoint.Query = string.Join(
+            '&',
+            queryParameters.Append($"api-version={ResponsesApiVersion}"));
+
+        return endpoint.Uri;
     }
 }

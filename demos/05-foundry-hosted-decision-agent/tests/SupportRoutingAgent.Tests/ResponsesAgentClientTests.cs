@@ -38,7 +38,7 @@ public sealed class ResponsesAgentClientTests
 
         var result = await client.InvokeAsync("synthetic duplicate charge");
 
-        Assert.Equal("https://example.services.ai.azure.com/agents/netconf-support-routing/protocols/openai/responses", handler.Url);
+        Assert.Equal("https://example.services.ai.azure.com/agents/netconf-support-routing/protocols/openai/responses?api-version=v1", handler.Url);
         Assert.Equal("https://ai.azure.com/.default", credential.Scope);
         Assert.Equal("Bearer synthetic-access-token", handler.Authorization);
         Assert.False(handler.HasApiKey);
@@ -51,6 +51,55 @@ public sealed class ResponsesAgentClientTests
         Assert.Equal(.61, result.Confidence);
         Assert.Equal(0, result.Usage!.OutputTokens);
         Assert.Null(result.Usage.TotalTokens);
+    }
+
+    [Theory]
+    [InlineData(
+        "https://example.services.ai.azure.com/agents/netconf-support-routing/protocols/openai",
+        "/agents/netconf-support-routing/protocols/openai/responses",
+        "?api-version=v1")]
+    [InlineData(
+        "https://example.services.ai.azure.com/agents/netconf-support-routing/protocols/openai/?mode=demo&region=west",
+        "/agents/netconf-support-routing/protocols/openai/responses",
+        "?mode=demo&region=west&api-version=v1")]
+    [InlineData(
+        "https://example.services.ai.azure.com/agents/netconf-support-routing/protocols/openai?api-version=preview&session_id=sample",
+        "/agents/netconf-support-routing/protocols/openai/responses",
+        "?session_id=sample&api-version=v1")]
+    [InlineData(
+        "https://example.services.ai.azure.com/agents/team%20east/protocols/openai?filter=a%2Bb",
+        "/agents/team%20east/protocols/openai/responses",
+        "?filter=a%2Bb&api-version=v1")]
+    public async Task AddsRequiredVersionWhilePreservingPathAndOtherQuery(
+        string baseUrl,
+        string expectedPath,
+        string expectedQuery)
+    {
+        using var handler = new FixtureHandler(HttpStatusCode.OK, """
+            {
+              "status": "completed",
+              "output": [{
+                "type": "message",
+                "content": [{
+                  "type": "output_text",
+                  "text": "{\"team\":\"billing\",\"confidence\":0.61,\"probabilities\":{\"billing\":0.7,\"technical-support\":0.1,\"account-access\":0.1,\"manual-review\":0.1},\"answer\":\"Suggested team: billing.\"}"
+                }]
+              }]
+            }
+            """);
+        using var http = new HttpClient(handler);
+        var client = new ResponsesAgentClient(
+            http,
+            new FixtureCredential(),
+            new Uri(baseUrl),
+            "netconf-support-routing");
+
+        var result = await client.InvokeAsync("synthetic ticket");
+
+        var requestUri = new Uri(handler.Url!);
+        Assert.Equal(expectedPath, requestUri.AbsolutePath);
+        Assert.Equal(expectedQuery, requestUri.Query);
+        Assert.Equal("billing", result.Team);
     }
 
     [Fact]

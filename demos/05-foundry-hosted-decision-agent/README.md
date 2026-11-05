@@ -15,9 +15,14 @@ assignment. This role is broad and includes key/secret reads; this observed
 success does not make it an inference-only or least-privilege recommendation.
 The sample creates no role assignments. The source and manifest target
 `netconf-support-routing`, separate from the preserved `support-routing` agent.
-The current source adds a named `decision.route_support` activity around the
-actual native decision call. Its redeployment and new hosted trace verification
-are pending.
+Version 2 has a verified hosted trace with the named
+`decision.route_support` activity around the actual native decision call.
+Other hosted sessions still return HTTP 401; the cause remains unproven and
+the successful trace does not establish consistent readiness. The C# caller's
+missing `api-version=v1` was a separate request-shape issue that returned HTTP
+400. The source now adds that required query parameter while preserving the
+endpoint path and other query values; this caller fix does not explain or
+resolve the hosted-session 401s.
 The transport adds bounded 401 diagnostics for challenge, unvalidated token
 audience and expiry only. It never logs bearer tokens, other claims or ticket text.
 
@@ -260,8 +265,10 @@ The standalone caller requests an Entra token for
 `https://ai.azure.com/.default`, sends `model`, `input`, `stream: false`, and
 `store: false` to the agent's OpenAI-compatible `/responses` endpoint, verifies
 the final status is `completed`, then deserializes the response text into the
-shared `RoutingDecision` type. Non-success HTTP responses, missing output, and
-`response.failed` are exceptions, not successful decisions.
+shared `RoutingDecision` type. The caller adds the required `api-version=v1`
+query parameter while preserving the endpoint path and any other query
+parameters. Non-success HTTP responses, missing output, and `response.failed`
+are exceptions, not successful decisions.
 
 Set `AGENT_OPENAI_BASE_URL` to the agent's OpenAI-compatible base URL from the
 deployed agent details, and `AGENT_NAME` to the hosted agent name. Do not use the
@@ -295,16 +302,26 @@ A previous version-1 hosted invocation completed a synthetic billing decision.
 Its Foundry Trajectories view showed the hosted invocation, successful native
 SystemOne HTTP call, and a state-store 404 followed by a successful 201 for the
 new session. The displayed error count referred to that expected state-store
-lookup, not the successful decision. The current source adds the named
-`decision.route_support` activity, which is not yet deployed or verified in the
-hosted trace. After redeployment, inspect the real trace and confirm the named
-activity's parent and the native HTTP dependency beneath it. Do not call it
-`execute_tool` or claim it is a model-generated tool. Offline tests verify local
-activity creation, status, cancellation/error propagation and collection by
-the AgentHost provider; they do not prove hosted telemetry or Foundry UI
-visibility. In the previous Graph view, **Show all spans** was required to
-reveal the SystemOne dependency and the initial state-store GET 404; Trajectories
-showed them directly. Verify both views again after the new deployment. Do not
+lookup, not the successful decision. The deployment session verified version 2
+trace `df35d8fec11cc4b2098473b07a8b96fa`, where
+`decision.route_support` encloses a successful native SystemOne request. Do not
+call it `execute_tool` or claim it is a model-generated tool. Offline tests
+verify local activity creation, status, cancellation/error propagation and
+collection by the AgentHost provider; they do not prove every hosted session
+will succeed. Other version-2 hosted sessions still return HTTP 401, and the
+cause remains unproven. The deployment session observed that failure follows
+the hosted session, not streaming versus nonstreaming request mode.
+
+The separate C# caller issue was HTTP 400 caused by a missing `api-version`.
+Its source now appends `api-version=v1` while preserving the endpoint path and
+other query parameters. This fixes the caller request shape and does not
+explain or resolve the hosted-session HTTP 401. The caller URI tests use a
+synthetic handler and do not establish live caller authorization or native
+inference success.
+
+In the previous Graph view, **Show all spans** was required to reveal the
+SystemOne dependency and the initial state-store GET 404; Trajectories showed
+them directly. Verify the new v2 trace in the portal before presenting. Do not
 fabricate screenshots or hide actual exporter failures. Separate v1 traces have
 also shown observability exporter/token HTTP 403 dependencies. The pinned
 Agent365 exporter and inspected Microsoft OpenTelemetry v1.2.0 source do not

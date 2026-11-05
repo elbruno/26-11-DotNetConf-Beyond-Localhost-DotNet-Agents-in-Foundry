@@ -103,15 +103,15 @@ sum, and `CountWords(text)` counts whitespace-separated words. They need no
 external service or additional credentials. Basic greetings and the Responses
 host remain available.
 
-The previously deployed `netconf-hello-agent:1` completed a real hosted response
-with the earlier two-tool source. Its Foundry Traces view showed
-`execute_tool GetDotNetFact` and `execute_tool AddNumbers`. The current three-tool
-source is awaiting the requested redeployment. Do not present the earlier
-version as containing `CountWords` or promise an exact total span count. The
+The earlier `netconf-hello-agent:1` completed a hosted response with the
+two-tool source. The deployed version 2 was verified in Foundry trace
+`7b022dc278bc5aa61cff60ec732859e7`, with successful
+`execute_tool GetDotNetFact`, `execute_tool AddNumbers`, and
+`execute_tool CountWords` spans. Do not promise an exact total span count. The
 earlier view also displayed `execute_tool multi_tool_use.parallel`, which is not
 one of this demo's registered C# functions.
 
-Use the current source prompts after the new version is deployed:
+Use these prompts with the deployed version 2:
 
 ```text
 Call GetDotNetFact and tell me the demo's .NET fact.
@@ -137,7 +137,7 @@ invocation by its Trace ID or Response ID. Inspect the named
 `execute_tool GetDotNetFact`, `execute_tool AddNumbers`, and
 `execute_tool CountWords` spans. Confirm `gen_ai.operation.name=execute_tool`
 and the matching `gen_ai.tool.name`. A fluent answer alone does not prove tool
-execution. The new version's CountWords span is not hosted-verified yet.
+execution. Version 2's CountWords span is hosted-verified in the trace above.
 
 The pinned .NET client is instrumented with `UseOpenTelemetry` before MAF builds
 its function-invocation loop. `ConfigureTracing(...AddSource(...))` subscribes the
@@ -171,10 +171,13 @@ agent names are fixed in source/manifests, not model deployment names.
 
 After reviewing and separately authorizing deployment, `azd deploy
 netconf-hello-agent --no-prompt` targets the new named agent. It does not
-rename or replace `hello-agent:2`, and no deployment of this new name is claimed.
-Do not provision a new project or alter access implicitly. A new named agent can
-have a new instance principal; verify its actual identity and permissions rather
-than assuming old agent assignments carry over.
+rename or replace the original `hello-agent`. The original agent is absent from
+the current Foundry agent list; the cause is unknown. The user-confirmed
+`netconf-hello-agent:2` was verified with all three registered tool spans above.
+Do not infer that the original agent was renamed or replaced. Do not provision a
+new project or alter access implicitly. A new named agent can have a new instance
+principal; verify its actual identity and permissions rather than assuming old
+agent assignments carry over.
 
 ## Demo 04
 
@@ -226,16 +229,18 @@ The previously deployed `netconf-support-routing:1` completed a real hosted
 billing decision after an owner-approved account-level Cognitive Services User
 assignment. This role is broad and includes key/secret reads; this observed
 success does not make it an inference-only or least-privilege recommendation.
-The current source adds a named `decision.route_support` activity around the
-actual native Decision call. A new deployment and verification of this activity
-in the hosted trace are pending.
+The deployment session verified version 2 trace
+`df35d8fec11cc4b2098473b07a8b96fa`, where `decision.route_support` encloses a
+successful native SystemOne request. Other hosted sessions still return HTTP
+401, and the cause remains unproven. Do not treat one successful trace as
+evidence that the issue is resolved.
 
 Two identity hops matter: caller to hosted endpoint, then current agent-instance
 identity to the native decision resource. AzureCliCredential is used locally;
 DefaultAzureCredential is used in Foundry. The successful version-1 trace
 showed DefaultAzureCredential and MSI token retrieval. Verify the runtime path
-again after redeployment rather than assuming a new version selects the same
-identity.
+for each invocation rather than assuming every session selects or accesses the
+same identity.
 The [hosted-agent token service](https://learn.microsoft.com/azure/foundry/agents/concepts/hosted-agent-token-service)
 can issue the current agent-instance identity, **not the project managed identity**.
 A token alone grants no downstream permission. Do not copy developer credentials
