@@ -137,9 +137,20 @@ decision transport reports HTTP status and bounded, sanitized authentication
 diagnostics without logging bearer tokens or ticket text. It checks JSON value
 kinds before reading allowlisted provider error fields; unexpected shapes and
 invalid JSON produce fixed safe diagnostics without replacing the HTTP failure.
-Cancellation and transport errors remain observable. The Foundry host
-disables GenAI message-content capture in telemetry, but telemetry settings are
-separate from protocol/session storage.
+On a native HTTP 401, the allowlisted diagnostics are attached to the same
+`decision.route_support` activity as custom tags. They include only challenge
+presence, fixed provider error indicators, GUID-shaped provider correlation
+IDs, the exact allowed audience or `unrecognized`, a bounded expiry value, and
+a SHA-256 fingerprint of a normalized GUID-shaped `oid`. Raw tokens, principal
+GUIDs, arbitrary claims or headers, provider bodies, and ticket text are never
+added to the activity tags. A successful native response emits only the
+`native_decision.failure_diagnostics_wired=true` tag, with no token metadata.
+This marker verifies instrumentation wiring, not telemetry ingestion or
+authorization. Available status, header and bounded token metadata remain
+attached if reading the 401 body fails or is canceled; the failure or
+cancellation still propagates. The
+Foundry host disables GenAI message-content capture in telemetry, but telemetry
+settings are separate from protocol/session storage.
 
 In another PowerShell terminal, send a synthetic ticket:
 
