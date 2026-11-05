@@ -88,6 +88,96 @@ public sealed class DecisionTransportTests
         Assert.DoesNotContain(token, output);
     }
 
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("\"synthetic-private-root\"")]
+    [InlineData("null")]
+    public async Task NonObjectErrorRootsPreserveUnauthorizedAndLogSafeShapeDiagnostic(string body)
+    {
+        string output = await SendUnauthorizedAsync(body);
+
+        Assert.Contains("unexpected JSON shape", output);
+        Assert.DoesNotContain("synthetic-private-root", output);
+        Assert.DoesNotContain(body, output);
+    }
+
+    [Fact]
+    public async Task NonObjectErrorPreservesUnauthorizedAndLogsSafeShapeDiagnostic()
+    {
+        const string body = """{"error":"synthetic-private-error"}""";
+
+        string output = await SendUnauthorizedAsync(body);
+
+        Assert.Contains("unexpected JSON shape", output);
+        Assert.DoesNotContain("synthetic-private-error", output);
+        Assert.DoesNotContain(body, output);
+    }
+
+    [Fact]
+    public async Task NonStringCodeAndMessagePreserveUnauthorizedAndLogSafeShapeDiagnostic()
+    {
+        const string body = """{"error":{"code":42,"message":{"private":"synthetic-private-message"}}}""";
+
+        string output = await SendUnauthorizedAsync(body);
+
+        Assert.Contains("unexpected JSON shape", output);
+        Assert.DoesNotContain("synthetic-private-message", output);
+        Assert.DoesNotContain(body, output);
+    }
+
+    [Fact]
+    public async Task InvalidErrorJsonPreservesUnauthorizedAndLogsOnlyGenericDiagnostic()
+    {
+        const string body = """{"error":"synthetic-private-invalid-json" """;
+
+        string output = await SendUnauthorizedAsync(body);
+
+        Assert.Contains("Native authentication error body was not JSON", output);
+        Assert.DoesNotContain("synthetic-private-invalid-json", output);
+        Assert.DoesNotContain(body, output);
+    }
+
+    [Fact]
+    public async Task TransportFailureRemainsObservable()
+    {
+        using var transport = new DecisionTransport(new RecordingLogger())
+        {
+            InnerHandler = new FailingHandler(new HttpRequestException("synthetic transport failure"))
+        };
+        using var http = new HttpClient(transport);
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://synthetic.invalid");
+
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(() => http.SendAsync(request));
+
+        Assert.Equal("synthetic transport failure", exception.Message);
+    }
+
+    [Fact]
+    public async Task CancellationRemainsObservable()
+    {
+        using var transport = new DecisionTransport(new RecordingLogger())
+        {
+            InnerHandler = new FailingHandler(new OperationCanceledException("synthetic cancellation"))
+        };
+        using var http = new HttpClient(transport);
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://synthetic.invalid");
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => http.SendAsync(request));
+    }
+
+    private static async Task<string> SendUnauthorizedAsync(string body)
+    {
+        var logger = new RecordingLogger();
+        using var transport = new DecisionTransport(logger) { InnerHandler = new UnauthorizedHandler(body) };
+        using var http = new HttpClient(transport);
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://synthetic.invalid");
+
+        using var response = await http.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        return string.Join("\n", logger.Messages);
+    }
+
     private static string CreateToken(string claims)
     {
         string payload = Convert.ToBase64String(Encoding.UTF8.GetBytes(claims))
@@ -95,18 +185,28 @@ public sealed class DecisionTransportTests
         return $"synthetic-header.{payload}.synthetic-signature";
     }
 
-    private sealed class UnauthorizedHandler : HttpMessageHandler
+    private sealed class UnauthorizedHandler(
+        string body = """{"error":{"code":"PermissionDenied","message":"Principal does not have access to API/Operation"}}""")
+        : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var response = new HttpResponseMessage(HttpStatusCode.Unauthorized)
             {
-                Content = new StringContent("""{"error":{"code":"PermissionDenied","message":"Principal does not have access to API/Operation"}}""")
+                Content = new StringContent(body)
             };
             response.Headers.TryAddWithoutValidation("x-ms-request-id", ProviderRequestId);
             response.Headers.TryAddWithoutValidation("x-private-diagnostic", "private-header-do-not-log");
             return Task.FromResult(response);
         }
+    }
+
+    private sealed class FailingHandler(Exception exception) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken) =>
+            Task.FromException<HttpResponseMessage>(exception);
     }
 
     private sealed class RecordingLogger : ILogger

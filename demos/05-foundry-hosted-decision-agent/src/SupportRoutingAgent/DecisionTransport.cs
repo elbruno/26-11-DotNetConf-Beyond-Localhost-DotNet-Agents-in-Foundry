@@ -28,14 +28,47 @@ public sealed class DecisionTransport(ILogger logger) : DelegatingHandler(
                 try
                 {
                     using var error = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
-                    if (error.RootElement.TryGetProperty("error", out var details))
+                    var root = error.RootElement;
+                    if (root.ValueKind != JsonValueKind.Object
+                        || !root.TryGetProperty("error", out var details)
+                        || details.ValueKind != JsonValueKind.Object)
+                    {
+                        logger.LogWarning("Native authentication error body had an unexpected JSON shape");
+                    }
+                    else
                     {
                         // Emit only known provider diagnostics, never an arbitrary response body.
-                        if (details.TryGetProperty("code", out var code) && code.GetString() == "PermissionDenied")
-                            logger.LogWarning("Native decision error code: PermissionDenied");
-                        if (details.TryGetProperty("message", out var message)
-                            && message.GetString()?.Contains("Principal does not have access to API/Operation", StringComparison.Ordinal) == true)
-                            logger.LogWarning("Native decision error message: Principal does not have access to API/Operation");
+                        var unexpectedValue = false;
+                        if (details.TryGetProperty("code", out var code))
+                        {
+                            if (code.ValueKind == JsonValueKind.String)
+                            {
+                                if (code.GetString() == "PermissionDenied")
+                                    logger.LogWarning("Native decision error code: PermissionDenied");
+                            }
+                            else
+                            {
+                                unexpectedValue = true;
+                            }
+                        }
+
+                        if (details.TryGetProperty("message", out var message))
+                        {
+                            if (message.ValueKind == JsonValueKind.String)
+                            {
+                                if (message.GetString()?.Contains(
+                                    "Principal does not have access to API/Operation",
+                                    StringComparison.Ordinal) == true)
+                                    logger.LogWarning("Native decision error message: Principal does not have access to API/Operation");
+                            }
+                            else
+                            {
+                                unexpectedValue = true;
+                            }
+                        }
+
+                        if (unexpectedValue)
+                            logger.LogWarning("Native authentication error body had an unexpected JSON shape");
                     }
                 }
                 catch (JsonException)

@@ -134,7 +134,10 @@ dotnet run --project .\src\SupportRoutingAgent -c Release --no-launch-profile
 The local Responses host has no application authentication. Keep the port
 private, do not expose or tunnel it, and use only synthetic ticket text. The
 decision transport reports HTTP status and bounded, sanitized authentication
-diagnostics without logging bearer tokens or ticket text. The Foundry host
+diagnostics without logging bearer tokens or ticket text. It checks JSON value
+kinds before reading allowlisted provider error fields; unexpected shapes and
+invalid JSON produce fixed safe diagnostics without replacing the HTTP failure.
+Cancellation and transport errors remain observable. The Foundry host
 disables GenAI message-content capture in telemetry, but telemetry settings are
 separate from protocol/session storage.
 
@@ -279,7 +282,12 @@ Copy that ID into the Foundry agent's **Traces** search to open the matching
 invocation. If the Graph view hides dependencies, select **Show all spans** and
 inspect the decision activity and native request status. Do not infer a match
 from timestamps alone. If the response ID is missing or malformed, the caller
-states that trace correlation is unavailable.
+states that trace correlation is unavailable. The caller validates the response
+ID before checking terminal status, so an HTTP 200 response with a non-completed
+status also reports its status and any valid ID on standard error, exits
+unsuccessfully, and emits no decision JSON. Search that exact ID to inspect a
+failed invocation; an absent or malformed ID is reported as unavailable
+correlation.
 
 ## Costs, data handling, and publication evidence
 

@@ -105,18 +105,51 @@ public sealed class ResponsesAgentClientTests
     }
 
     [Fact]
-    public async Task FailedResponsesStatusIsNotDeserializedAsSuccess()
+    public async Task FailedResponsesStatusReportsResponseIdWithoutDecisionJson()
     {
         using var handler = new FixtureHandler(
             HttpStatusCode.OK,
-            """{"id":"caresp_0123456789abcdef","status":"failed","error":{"message":"Synthetic provider failure"}}""");
+            FailedResponse("\"caresp_0123456789abcdef\""));
         using var http = new HttpClient(handler);
         var client = Create(http, new FixtureCredential());
+        using var standardOutput = new StringWriter();
+        using var standardError = new StringWriter();
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var error = await Assert.ThrowsAsync<ResponsesAgentStatusException>(() =>
             client.InvokeAsync("synthetic ticket"));
+        CallerOutput.WriteTerminalFailure(error, standardError);
 
         Assert.Contains("Final status: failed", error.Message);
+        Assert.Equal("failed", error.FinalStatus);
+        Assert.Equal("caresp_0123456789abcdef", error.ResponseId);
+        Assert.Empty(standardOutput.ToString());
+        Assert.Contains("status=failed", standardError.ToString());
+        Assert.Contains("responseId=caresp_0123456789abcdef", standardError.ToString());
+        Assert.DoesNotContain("Synthetic provider failure", standardError.ToString());
+        Assert.DoesNotContain("error", standardError.ToString());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("\"caresp_bad id\"")]
+    public async Task FailedResponsesStatusReportsUnavailableCorrelationForInvalidId(string? idJson)
+    {
+        using var handler = new FixtureHandler(HttpStatusCode.OK, FailedResponse(idJson));
+        using var http = new HttpClient(handler);
+        var client = Create(http, new FixtureCredential());
+        using var standardOutput = new StringWriter();
+        using var standardError = new StringWriter();
+
+        var error = await Assert.ThrowsAsync<ResponsesAgentStatusException>(() =>
+            client.InvokeAsync("synthetic ticket"));
+        CallerOutput.WriteTerminalFailure(error, standardError);
+
+        Assert.Equal("failed", error.FinalStatus);
+        Assert.Null(error.ResponseId);
+        Assert.Empty(standardOutput.ToString());
+        Assert.Contains("responseId=unavailable", standardError.ToString());
+        Assert.Contains("Trace correlation is unavailable.", standardError.ToString());
+        Assert.DoesNotContain("Synthetic provider failure", standardError.ToString());
     }
 
     [Fact]
@@ -126,10 +159,88 @@ public sealed class ResponsesAgentClientTests
         using var http = new HttpClient(handler);
         var client = Create(http, new FixtureCredential());
 
-        var error = await Assert.ThrowsAsync<HttpRequestException>(() =>
+        var error = await Assert.ThrowsAsync<ResponsesAgentHttpException>(() =>
             client.InvokeAsync("synthetic ticket"));
 
-        Assert.Equal(HttpStatusCode.Forbidden, error.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, error.ResponseStatusCode);
+        Assert.Null(error.ProviderErrorType);
+        Assert.Null(error.ProviderErrorCode);
+    }
+
+    [Fact]
+    public async Task HttpFailureReportsOnlyBoundedProviderFieldsAndValidatedRequestId()
+    {
+        const string privateMessage = "synthetic-ticket-do-not-log";
+        const string providerRequestId = "11111111-1111-4111-8111-111111111111";
+        using var handler = new FixtureHandler(
+            HttpStatusCode.BadRequest,
+            JsonSerializer.Serialize(new
+            {
+                error = new
+                {
+                    type = "invalid_request_error",
+                    code = "invalid_value",
+                    param = "model",
+                    message = privateMessage
+                }
+            }),
+            providerRequestId);
+        using var http = new HttpClient(handler);
+        var client = Create(http, new FixtureCredential());
+
+        var failure = await Assert.ThrowsAsync<ResponsesAgentHttpException>(() =>
+            client.InvokeAsync("synthetic-ticket-do-not-log"));
+        using var standardOutput = new StringWriter();
+        using var standardError = new StringWriter();
+
+        CallerOutput.WriteHttpFailure(failure, standardError);
+
+        Assert.Equal(HttpStatusCode.BadRequest, failure.ResponseStatusCode);
+        Assert.Equal("invalid_request_error", failure.ProviderErrorType);
+        Assert.Equal("invalid_value", failure.ProviderErrorCode);
+        Assert.Equal("model", failure.ProviderErrorParameter);
+        Assert.Equal("x-ms-request-id", failure.ProviderRequestIdHeader);
+        Assert.Equal(providerRequestId, failure.ProviderRequestId);
+        Assert.Empty(standardOutput.ToString());
+        Assert.Contains("status=400", standardError.ToString());
+        Assert.Contains("parameter=model", standardError.ToString());
+        Assert.Contains(providerRequestId, standardError.ToString());
+        Assert.DoesNotContain(privateMessage, standardError.ToString());
+        Assert.DoesNotContain("message", standardError.ToString());
+        Assert.DoesNotContain("synthetic-ticket-do-not-log", standardError.ToString());
+    }
+
+    [Fact]
+    public async Task HttpFailureOmitsMalformedProviderFieldsAndRequestIds()
+    {
+        const string privateValue = "private-response-value-do-not-log";
+        using var handler = new FixtureHandler(
+            HttpStatusCode.BadRequest,
+            JsonSerializer.Serialize(new
+            {
+                error = new
+                {
+                    type = privateValue,
+                    code = "bad code",
+                    param = privateValue,
+                    message = privateValue
+                }
+            }),
+            privateValue);
+        using var http = new HttpClient(handler);
+        var client = Create(http, new FixtureCredential());
+
+        var failure = await Assert.ThrowsAsync<ResponsesAgentHttpException>(() =>
+            client.InvokeAsync("synthetic ticket"));
+        using var standardError = new StringWriter();
+
+        CallerOutput.WriteHttpFailure(failure, standardError);
+
+        Assert.Equal("other", failure.ProviderErrorType);
+        Assert.Null(failure.ProviderErrorCode);
+        Assert.Equal("other", failure.ProviderErrorParameter);
+        Assert.Null(failure.ProviderRequestId);
+        Assert.DoesNotContain(privateValue, standardError.ToString());
     }
 
     [Fact]
@@ -234,6 +345,13 @@ public sealed class ResponsesAgentClientTests
         return $$"""{"status":"completed",{{idProperty}}"output":[{"type":"message","content":[{"type":"output_text","text":{{decisionText}}}]}]}""";
     }
 
+    private static string FailedResponse(string? idJson)
+    {
+        var idProperty = idJson is null ? string.Empty : $"\"id\":{idJson},";
+        return "{\"status\":\"failed\"," + idProperty +
+            "\"error\":{\"message\":\"Synthetic provider failure\"}}";
+    }
+
     private static ResponsesAgentClient Create(HttpClient http, TokenCredential credential) =>
         new(
             http,
@@ -259,7 +377,10 @@ public sealed class ResponsesAgentClientTests
             new(GetToken(requestContext, cancellationToken));
     }
 
-    private sealed class FixtureHandler(HttpStatusCode status, string content) : HttpMessageHandler
+    private sealed class FixtureHandler(
+        HttpStatusCode status,
+        string content,
+        string? requestId = null) : HttpMessageHandler
     {
         public string? Url { get; private set; }
         public string? Authorization { get; private set; }
@@ -275,10 +396,16 @@ public sealed class ResponsesAgentClientTests
             HasApiKey = request.Headers.Contains("api-key");
             Body = await request.Content!.ReadAsStringAsync(cancellationToken);
 
-            return new HttpResponseMessage(status)
+            var response = new HttpResponseMessage(status)
             {
                 Content = new StringContent(content, Encoding.UTF8, "application/json")
             };
+            if (requestId is not null)
+            {
+                response.Headers.TryAddWithoutValidation("x-ms-request-id", requestId);
+            }
+
+            return response;
         }
     }
 }

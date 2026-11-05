@@ -16,5 +16,18 @@ var ticket = args.Length == 0
 using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
 var credential = new AzureCliCredential();
 var client = new ResponsesAgentClient(httpClient, credential, new Uri(endpoint), agentName);
-var result = await client.InvokeAsync(ticket);
-CallerOutput.Write(result, Console.Out, Console.Error);
+try
+{
+    var result = await client.InvokeAsync(ticket);
+    CallerOutput.Write(result, Console.Out, Console.Error);
+}
+catch (ResponsesAgentHttpException failure)
+{
+    CallerOutput.WriteHttpFailure(failure, Console.Error);
+    Environment.ExitCode = 1;
+}
+catch (ResponsesAgentStatusException failure)
+{
+    CallerOutput.WriteTerminalFailure(failure, Console.Error);
+    Environment.ExitCode = 1;
+}
