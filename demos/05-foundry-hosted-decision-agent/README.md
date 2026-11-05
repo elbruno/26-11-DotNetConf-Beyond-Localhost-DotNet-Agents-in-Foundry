@@ -9,22 +9,11 @@ remote-build ZIP packaging omitted the sibling contracts and linked source.
 Keep the complete five-demo bundle together. Run setup once as described in
 [the session demo guide](../README.md); future local runs reuse the ignored JSON.
 V08 uses `AzureCliCredential` locally and `DefaultAzureCredential` in Foundry.
-The previously deployed `netconf-support-routing:1` completed a real hosted
-billing decision after an owner-approved account-level Cognitive Services User
-assignment. This role is broad and includes key/secret reads; this observed
-success does not make it an inference-only or least-privilege recommendation.
-The sample creates no role assignments. The source and manifest target
-`netconf-support-routing`, separate from the preserved `support-routing` agent.
-Version 2 has a verified hosted trace with the named
-`decision.route_support` activity around the actual native decision call.
-Other hosted sessions still return HTTP 401; the cause remains unproven and
-the successful trace does not establish consistent readiness. The C# caller's
-missing `api-version=v1` was a separate request-shape issue that returned HTTP
-400. The source now adds that required query parameter while preserving the
-endpoint path and other query values; this caller fix does not explain or
-resolve the hosted-session 401s.
-The transport adds bounded 401 diagnostics for challenge, unvalidated token
-audience and expiry only. It never logs bearer tokens, other claims or ticket text.
+Native Decision inference uses the hosted agent identity, not the caller
+identity. The sample creates no role assignments. Have the resource owner
+confirm the supported permission and narrowest scope before deployment. An
+offline test or successful HTTP exchange does not prove that hosted inference
+will complete.
 
 A .NET 10 sample that routes synthetic support tickets with
 **Microsoft-Decision-1**, a native Microsoft Foundry decision model. A custom
@@ -112,12 +101,10 @@ authorization guidance identifies **Foundry Agent Consumer** at the project or
 individual-agent scope as the least-privilege built-in role for endpoint-only
 callers. See [Configure agent endpoint authorization](https://learn.microsoft.com/azure/foundry/agents/how-to/configure-agent-endpoint-authorization?WT.mc_id=academic-105485-koreyst).
 
-Native Decision inference uses the hosted agent identity, not the caller identity.
-A real version-1 invocation succeeded after a broad, owner-approved account-level
-role assignment. The built-in role includes key/secret reads and is not a
-least-privilege answer. This sample creates no role assignments and does not
-widen access automatically. Confirm the supported inference role and narrowest
-scope with the resource owner before deployment.
+Native Decision inference uses the hosted agent identity, not the caller
+identity. This sample creates no role assignments and does not widen access
+automatically. Confirm the supported inference role and narrowest scope with
+the resource owner before deployment.
 
 ## Run offline tests
 
@@ -146,9 +133,10 @@ dotnet run --project .\src\SupportRoutingAgent -c Release --no-launch-profile
 
 The local Responses host has no application authentication. Keep the port
 private, do not expose or tunnel it, and use only synthetic ticket text. The
-decision transport logs HTTP status only. The Foundry host disables GenAI
-message-content capture in telemetry, but telemetry settings are separate from
-protocol/session storage.
+decision transport reports HTTP status and bounded, sanitized authentication
+diagnostics without logging bearer tokens or ticket text. The Foundry host
+disables GenAI message-content capture in telemetry, but telemetry settings are
+separate from protocol/session storage.
 
 In another PowerShell terminal, send a synthetic ticket:
 
@@ -229,9 +217,8 @@ does not create a Foundry project or configure role assignments.
    is local and ignored by Git.
 
 3. Before deployment, verify the hosted agent identity can call the decision
-   deployment at the narrowest supported scope. Do not copy the prototype's
-   broad account-level role assignment as a workaround. Then deploy the code
-   from this directory:
+   deployment at the narrowest supported scope. This sample creates no role
+   assignments. Then deploy the code from this directory:
 
    ```powershell
    azd deploy
@@ -286,6 +273,14 @@ the endpoint interaction permission at project or agent scope. The request
 sets `store` to `false` and uses no previous response ID. If you instead create
 a session with the `azd` CLI, stop only the session ID from that invocation.
 
+After a completed response, the caller keeps the typed decision JSON on
+standard output and writes the validated Foundry response ID to standard error.
+Copy that ID into the Foundry agent's **Traces** search to open the matching
+invocation. If the Graph view hides dependencies, select **Show all spans** and
+inspect the decision activity and native request status. Do not infer a match
+from timestamps alone. If the response ID is missing or malformed, the caller
+states that trace correlation is unavailable.
+
 ## Costs, data handling, and publication evidence
 
 Local inference still incurs model charges. Hosted agent execution, deployment
@@ -298,39 +293,16 @@ protocol storage are separate controls. The native transport logger records no
 request body, response body, ticket text, or credentials. Do not commit `.azure`
 state, tokens, private endpoints, or logs.
 
-A previous version-1 hosted invocation completed a synthetic billing decision.
-Its Foundry Trajectories view showed the hosted invocation, successful native
-SystemOne HTTP call, and a state-store 404 followed by a successful 201 for the
-new session. The displayed error count referred to that expected state-store
-lookup, not the successful decision. The deployment session verified version 2
-trace `df35d8fec11cc4b2098473b07a8b96fa`, where
-`decision.route_support` encloses a successful native SystemOne request. Do not
-call it `execute_tool` or claim it is a model-generated tool. Offline tests
-verify local activity creation, status, cancellation/error propagation and
-collection by the AgentHost provider; they do not prove every hosted session
-will succeed. Other version-2 hosted sessions still return HTTP 401, and the
-cause remains unproven. The deployment session observed that failure follows
-the hosted session, not streaming versus nonstreaming request mode.
+The hosted source emits a `decision.route_support` activity around the actual
+native Decision call. It is not a function tool and should not be described as
+`execute_tool` or as a model-generated tool. Offline tests verify local activity
+creation, status, cancellation/error propagation and collection by the
+AgentHost provider; they do not prove hosted permissions or inference success.
 
-The separate C# caller issue was HTTP 400 caused by a missing `api-version`.
-Its source now appends `api-version=v1` while preserving the endpoint path and
-other query parameters. This fixes the caller request shape and does not
-explain or resolve the hosted-session HTTP 401. The caller URI tests use a
-synthetic handler and do not establish live caller authorization or native
-inference success.
-
-In the previous Graph view, **Show all spans** was required to reveal the
-SystemOne dependency and the initial state-store GET 404; Trajectories showed
-them directly. Verify the new v2 trace in the portal before presenting. Do not
-fabricate screenshots or hide actual exporter failures. Separate v1 traces have
-also shown observability exporter/token HTTP 403 dependencies. The pinned
-Agent365 exporter and inspected Microsoft OpenTelemetry v1.2.0 source do not
-wrap token acquisition and HTTP export in instrumentation suppression. This is
-consistent with, but does not prove, exporter self-instrumentation. No supported
-documented hook to replace or wrap the host-managed exporter was found in the
-pinned AgentHost surface, so no targeted fix is included. These failures remain
-distinct from the successful native Decision call. Keep real exporter failures
-visible and verify current behavior after redeployment.
+For a completed caller run, use its response ID to search the agent's Foundry
+Traces view. If Graph hides the native dependency, choose **Show all spans**,
+then verify the decision activity and native request status. Do not infer a
+match from timestamps alone or hide exporter failures.
 
 ## Decision API evolution
 

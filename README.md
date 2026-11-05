@@ -8,9 +8,20 @@ Run `& .\demos\Set-DemoEnvironment.ps1` once in PowerShell 7 from this bundle ro
 
 For Demo 02, run only `azd ai agent run` from its folder and show the browser Inspector. For Demo 04, run `dotnet run --project .\demos\04-local-decision-agent\LocalDecisionAgent.csproj`; the console displays its question before inference and indented JSON afterward.
 
-Demo 03 adds `GetDotNetFact`, `AddNumbers` and `CountWords` with real MAF/OpenTelemetry execution spans. Its exact Foundry prompts and trace-navigation steps are in the demo README. Demo 02 is unchanged. The deployment session verified the deployed v2 agent with successful spans for all three registered tools.
+Demo 03 adds `GetDotNetFact`, `AddNumbers` and `CountWords` as read-only MAF
+tools with OpenTelemetry activities. Its prompts and trace-navigation steps
+are in the demo README. A live trace should be checked for the expected tool
+spans; a fluent answer alone is not evidence that the tools ran. Demo 02 is
+unchanged.
 
-The hosted sources/manifests use the confirmed names `netconf-hello-agent` and `netconf-support-routing`. Demo 05 version 2 has a verified trace with the named `decision.route_support` activity around a successful native Decision call. Other hosted sessions still return HTTP 401, with cause unproven; one successful trace does not establish consistent readiness. The C# caller's separate missing `api-version=v1` request parameter, which caused HTTP 400, is fixed in source and does not resolve the hosted-session 401. Its previously used account-level role is broad and is not an inference-only or least-privilege recommendation. The four-setting setup helper is unchanged in behavior. For the optional caller, obtain the agent's actual endpoint and set `AGENT_NAME` to `netconf-support-routing` only after a verified deployment.
+The hosted examples include tool and native-decision instrumentation. A
+completed HTTP exchange or local test does not prove successful hosted
+inference; verify the final response status, typed result, native request, and
+matching trace for each live run. The Demo 05 caller appends the required
+Responses API version while preserving the endpoint path and query, keeps
+decision JSON on standard output, and writes a validated response ID to
+standard error for Trace search. These source-level checks do not establish
+cloud authorization or hosted reliability.
 
 The main example follows [From dotnet run to Foundry Hosted Agent in 3 lines of C#](https://devblogs.microsoft.com/dotnet/from-dotnet-run-to-foundry-hosted-agent-in-3-lines-of-csharp/). Stage 05 preserves its upstream dependency pins, routing logic, license and notices, with documented configuration/packaging adaptations. Stage 04 links its exact routing logic/contracts, so keep the complete bundle together. Local execution and synthetic tests are not cloud deployment or real inference evidence.
 

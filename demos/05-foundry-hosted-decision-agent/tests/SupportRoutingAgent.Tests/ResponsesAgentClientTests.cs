@@ -19,6 +19,7 @@ public sealed class ResponsesAgentClientTests
         var credential = new FixtureCredential();
         using var handler = new FixtureHandler(HttpStatusCode.OK, """
             {
+              "id": "caresp_0123456789abcdef",
               "status": "completed",
               "output": [{
                 "type": "message",
@@ -47,10 +48,11 @@ public sealed class ResponsesAgentClientTests
         Assert.Equal("synthetic duplicate charge", request.RootElement.GetProperty("input").GetString());
         Assert.False(request.RootElement.GetProperty("stream").GetBoolean());
         Assert.False(request.RootElement.GetProperty("store").GetBoolean());
-        Assert.Equal("billing", result.Team);
-        Assert.Equal(.61, result.Confidence);
-        Assert.Equal(0, result.Usage!.OutputTokens);
-        Assert.Null(result.Usage.TotalTokens);
+        Assert.Equal("billing", result.Decision.Team);
+        Assert.Equal(.61, result.Decision.Confidence);
+        Assert.Equal(0, result.Decision.Usage!.OutputTokens);
+        Assert.Null(result.Decision.Usage.TotalTokens);
+        Assert.Equal("caresp_0123456789abcdef", result.ResponseId);
     }
 
     [Theory]
@@ -99,7 +101,7 @@ public sealed class ResponsesAgentClientTests
         var requestUri = new Uri(handler.Url!);
         Assert.Equal(expectedPath, requestUri.AbsolutePath);
         Assert.Equal(expectedQuery, requestUri.Query);
-        Assert.Equal("billing", result.Team);
+        Assert.Equal("billing", result.Decision.Team);
     }
 
     [Fact]
@@ -107,7 +109,7 @@ public sealed class ResponsesAgentClientTests
     {
         using var handler = new FixtureHandler(
             HttpStatusCode.OK,
-            """{"status":"failed","error":{"message":"Synthetic provider failure"}}""");
+            """{"id":"caresp_0123456789abcdef","status":"failed","error":{"message":"Synthetic provider failure"}}""");
         using var http = new HttpClient(handler);
         var client = Create(http, new FixtureCredential());
 
@@ -139,6 +141,97 @@ public sealed class ResponsesAgentClientTests
 
         await Assert.ThrowsAsync<InvalidDataException>(() =>
             client.InvokeAsync("synthetic ticket"));
+    }
+
+    [Fact]
+    public async Task MissingResponseIdReturnsDecisionWithoutClaimingTraceCorrelation()
+    {
+        using var handler = new FixtureHandler(HttpStatusCode.OK, CompletedResponse());
+        using var http = new HttpClient(handler);
+        var client = Create(http, new FixtureCredential());
+
+        var result = await client.InvokeAsync("synthetic ticket");
+
+        Assert.Equal("billing", result.Decision.Team);
+        Assert.Null(result.ResponseId);
+    }
+
+    [Theory]
+    [InlineData("\"response_0123456789abcdef\"")]
+    [InlineData("\"caresp_\"")]
+    [InlineData("\"caresp_bad id\"")]
+    [InlineData("\"caresp_bad\\nid\"")]
+    [InlineData("null")]
+    [InlineData("42")]
+    public async Task MalformedResponseIdReturnsDecisionWithoutCorrelation(string idJson)
+    {
+        using var handler = new FixtureHandler(HttpStatusCode.OK, CompletedResponse(idJson));
+        using var http = new HttpClient(handler);
+        var client = Create(http, new FixtureCredential());
+
+        var result = await client.InvokeAsync("synthetic ticket");
+
+        Assert.Equal("billing", result.Decision.Team);
+        Assert.Null(result.ResponseId);
+    }
+
+    [Fact]
+    public void CallerOutputKeepsDecisionJsonOnStdoutAndResponseIdOnStderr()
+    {
+        var result = new ResponsesAgentResult(
+            new SupportRouting.RoutingDecision(
+                "billing",
+                .61,
+                new Dictionary<string, double>
+                {
+                    ["billing"] = .7,
+                    ["technical-support"] = .1,
+                    ["account-access"] = .1,
+                    ["manual-review"] = .1
+                },
+                new SupportRouting.RoutingUsage(12, 0, null, null, null),
+                "Suggested team: billing. A person should confirm the route before taking action."),
+            "caresp_0123456789abcdef");
+        using var standardOutput = new StringWriter();
+        using var standardError = new StringWriter();
+
+        CallerOutput.Write(result, standardOutput, standardError);
+
+        Assert.Equal(
+            """{"team":"billing","confidence":0.61,"probabilities":{"billing":0.7,"technical-support":0.1,"account-access":0.1,"manual-review":0.1},"usage":{"inputTokens":12,"outputTokens":0,"totalTokens":null,"reasoningTokens":null,"cachedTokens":null},"answer":"Suggested team: billing. A person should confirm the route before taking action."}""",
+            standardOutput.ToString().Trim());
+        Assert.Equal("Foundry response ID: caresp_0123456789abcdef", standardError.ToString().Trim());
+    }
+
+    [Fact]
+    public void CallerOutputExplicitlyReportsUnavailableCorrelation()
+    {
+        var result = new ResponsesAgentResult(
+            new SupportRouting.RoutingDecision(
+                "billing",
+                .61,
+                new Dictionary<string, double>(),
+                null,
+                "Suggested team: billing."),
+            null);
+        using var standardOutput = new StringWriter();
+        using var standardError = new StringWriter();
+
+        CallerOutput.Write(result, standardOutput, standardError);
+
+        Assert.Contains("\"team\":\"billing\"", standardOutput.ToString());
+        Assert.DoesNotContain("response ID", standardOutput.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(
+            "Foundry response ID is missing or malformed; trace correlation is unavailable.",
+            standardError.ToString().Trim());
+    }
+
+    private static string CompletedResponse(string? idJson = null)
+    {
+        var idProperty = idJson is null ? string.Empty : $"\"id\":{idJson},";
+        const string decision = """{"team":"billing","confidence":0.61,"probabilities":{"billing":0.7,"technical-support":0.1,"account-access":0.1,"manual-review":0.1},"answer":"Suggested team: billing."}""";
+        var decisionText = JsonSerializer.Serialize(decision);
+        return $$"""{"status":"completed",{{idProperty}}"output":[{"type":"message","content":[{"type":"output_text","text":{{decisionText}}}]}]}""";
     }
 
     private static ResponsesAgentClient Create(HttpClient http, TokenCredential credential) =>

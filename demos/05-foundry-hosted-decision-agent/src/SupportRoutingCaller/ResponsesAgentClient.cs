@@ -12,10 +12,13 @@ using SupportRouting;
 
 namespace SupportRoutingCaller;
 
+public sealed record ResponsesAgentResult(RoutingDecision Decision, string? ResponseId);
+
 public sealed class ResponsesAgentClient
 {
     private const string FoundryScope = "https://ai.azure.com/.default";
     private const string ResponsesApiVersion = "v1";
+    private const string HostedResponseIdPrefix = "caresp_";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly HttpClient _httpClient;
@@ -46,7 +49,7 @@ public sealed class ResponsesAgentClient
         _agentName = agentName;
     }
 
-    public async Task<RoutingDecision> InvokeAsync(
+    public async Task<ResponsesAgentResult> InvokeAsync(
         string ticket,
         CancellationToken cancellationToken = default)
     {
@@ -88,8 +91,32 @@ public sealed class ResponsesAgentClient
         }
 
         var decisionJson = FindOutputText(root);
-        return JsonSerializer.Deserialize<RoutingDecision>(decisionJson, JsonOptions)
+        var decision = JsonSerializer.Deserialize<RoutingDecision>(decisionJson, JsonOptions)
             ?? throw new InvalidDataException("The completed Foundry response did not contain a routing decision.");
+
+        return new ResponsesAgentResult(decision, FindResponseId(root));
+    }
+
+    private static string? FindResponseId(JsonElement response)
+    {
+        if (!response.TryGetProperty("id", out var idElement) ||
+            idElement.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        var responseId = idElement.GetString();
+        if (responseId is null ||
+            responseId.Length <= HostedResponseIdPrefix.Length ||
+            responseId.Length > 256 ||
+            !responseId.StartsWith(HostedResponseIdPrefix, StringComparison.Ordinal) ||
+            responseId.Skip(HostedResponseIdPrefix.Length).Any(character =>
+                !char.IsAsciiLetterOrDigit(character) && character is not ('_' or '-')))
+        {
+            return null;
+        }
+
+        return responseId;
     }
 
     private static string FindOutputText(JsonElement response)

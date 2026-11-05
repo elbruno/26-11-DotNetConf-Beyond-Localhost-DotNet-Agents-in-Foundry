@@ -103,15 +103,7 @@ sum, and `CountWords(text)` counts whitespace-separated words. They need no
 external service or additional credentials. Basic greetings and the Responses
 host remain available.
 
-The earlier `netconf-hello-agent:1` completed a hosted response with the
-two-tool source. The deployed version 2 was verified in Foundry trace
-`7b022dc278bc5aa61cff60ec732859e7`, with successful
-`execute_tool GetDotNetFact`, `execute_tool AddNumbers`, and
-`execute_tool CountWords` spans. Do not promise an exact total span count. The
-earlier view also displayed `execute_tool multi_tool_use.parallel`, which is not
-one of this demo's registered C# functions.
-
-Use these prompts with the deployed version 2:
+Use these prompts with the deployed agent:
 
 ```text
 Call GetDotNetFact and tell me the demo's .NET fact.
@@ -137,7 +129,8 @@ invocation by its Trace ID or Response ID. Inspect the named
 `execute_tool GetDotNetFact`, `execute_tool AddNumbers`, and
 `execute_tool CountWords` spans. Confirm `gen_ai.operation.name=execute_tool`
 and the matching `gen_ai.tool.name`. A fluent answer alone does not prove tool
-execution. Version 2's CountWords span is hosted-verified in the trace above.
+execution. Do not infer a match from timestamps alone or promise an exact total
+span count.
 
 The pinned .NET client is instrumented with `UseOpenTelemetry` before MAF builds
 its function-invocation loop. `ConfigureTracing(...AddSource(...))` subscribes the
@@ -220,46 +213,33 @@ Deployment configuration remains separate:
 | Decision__Endpoint | DECISION_ENDPOINT | Decision__Endpoint |
 | Decision__Deployment | DECISION_DEPLOYMENT | Decision__Deployment |
 
-Also set the verified AZURE_AI_PROJECT_ID and AZURE_TENANT_ID. Explicitly save
-these aliases with `azd env set` in the selected environment; do not assume the
-setup file or process values populate azd. `azd deploy netconf-support-routing
---no-prompt` publishes a version but never proves native-model permission.
+Also set AZURE_AI_PROJECT_ID and AZURE_TENANT_ID. Explicitly save these aliases
+with `azd env set` in the selected environment; do not assume the setup file or
+process values populate azd. `azd deploy netconf-support-routing --no-prompt`
+publishes a version but does not prove that hosted inference is authorized.
 
-The previously deployed `netconf-support-routing:1` completed a real hosted
-billing decision after an owner-approved account-level Cognitive Services User
-assignment. This role is broad and includes key/secret reads; this observed
-success does not make it an inference-only or least-privilege recommendation.
-The deployment session verified version 2 trace
-`df35d8fec11cc4b2098473b07a8b96fa`, where `decision.route_support` encloses a
-successful native SystemOne request. Other hosted sessions still return HTTP
-401, and the cause remains unproven. Do not treat one successful trace as
-evidence that the issue is resolved.
-
-Two identity hops matter: caller to hosted endpoint, then current agent-instance
+Two identity hops matter: caller to hosted endpoint, then the hosted agent
 identity to the native decision resource. AzureCliCredential is used locally;
-DefaultAzureCredential is used in Foundry. The successful version-1 trace
-showed DefaultAzureCredential and MSI token retrieval. Verify the runtime path
-for each invocation rather than assuming every session selects or accesses the
-same identity.
+DefaultAzureCredential is used in Foundry. Verify the actual runtime identity
+and native request status for each live invocation. A registration, successful
+HTTP exchange, or local test does not prove a completed hosted inference.
 The [hosted-agent token service](https://learn.microsoft.com/azure/foundry/agents/concepts/hosted-agent-token-service)
-can issue the current agent-instance identity, **not the project managed identity**.
-A token alone grants no downstream permission. Do not copy developer credentials
-into the deployed environment to bypass missing access.
+can issue the current agent-instance identity. A token alone grants no
+downstream permission. Do not copy developer credentials into the deployed
+environment to bypass missing access.
 The setup script does not add roles or store keys.
 
 The optional C# caller needs AGENT_OPENAI_BASE_URL and AGENT_NAME only after an
 actual deployment. Obtain them from verified agent details, never guess them or
-substitute the model/project endpoint. For the new named Demo 05, verify that
-those details identify `netconf-support-routing`, not the original
-`support-routing`. The caller accepts the actual configured name and does not
-silently rewrite an old endpoint or name.
+substitute the model/project endpoint. Use the actual configured agent name;
+the caller does not silently rewrite an endpoint or name.
 
 ## Verification boundary
 
 All five projects build with the existing locked dependency graph. Synthetic
 configuration, agent, transport and host tests do not establish cloud readiness,
-model accuracy or permissions. Current deployment evidence is tracked in the
-private speaker guide, not embedded as tenant-specific configuration here.
+model accuracy or permissions. Verify each live response's final status,
+decision result, native request, and corresponding trace before presenting it.
 Never present a failed native-model response as a completed decision.
 
 References: [primary hosting article](https://devblogs.microsoft.com/dotnet/from-dotnet-run-to-foundry-hosted-agent-in-3-lines-of-csharp/),

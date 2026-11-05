@@ -1,8 +1,9 @@
 /*
  * Purpose: Keep native decision transport telemetry free of request content.
- * Status and bounded authentication-error metadata are recorded, never bearer tokens
- * or ticket text. Authentication and payload handling stay in the SDK.
+ * Status and bounded, unvalidated authentication metadata support private diagnosis.
+ * Never record bearer tokens or ticket text. Authentication stays in the SDK.
  */
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -19,8 +20,9 @@ public sealed class DecisionTransport(ILogger logger) : DelegatingHandler(
         logger.LogInformation("Native decision HTTP {StatusCode}", (int)response.StatusCode);
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            logger.LogWarning("Native decision authentication challenge: {Challenge}",
-                string.Join(", ", response.Headers.WwwAuthenticate));
+            logger.LogWarning("Native decision authentication challenge present: {Present}",
+                response.Headers.WwwAuthenticate.Count > 0);
+            LogProviderRequestIds(response, logger);
             if (response.Content.Headers.ContentLength is > 0 and <= 4096)
             {
                 try
@@ -41,24 +43,68 @@ public sealed class DecisionTransport(ILogger logger) : DelegatingHandler(
                     logger.LogWarning("Native authentication error body was not JSON");
                 }
             }
-            // Decode only diagnostic audience/expiry claims, never log the token itself.
-            if (request.Headers.Authorization?.Parameter?.Split('.') is [_, var payload, _])
-            {
-                try
-                {
-                    payload = payload.Replace('-', '+').Replace('_', '/');
-                    payload = payload.PadRight(payload.Length + (4 - payload.Length % 4) % 4, '=');
-                    using var claims = JsonDocument.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(payload)));
-                    logger.LogWarning("Unvalidated bearer metadata: audience={Audience}, expires={Expires}",
-                        claims.RootElement.GetProperty("aud").ToString(),
-                        claims.RootElement.GetProperty("exp").GetInt64());
-                }
-                catch (Exception ex) when (ex is FormatException or JsonException or KeyNotFoundException or InvalidOperationException)
-                {
-                    logger.LogWarning("Bearer diagnostic metadata unavailable: {ErrorType}", ex.GetType().Name);
-                }
-            }
+            LogUnvalidatedBearerMetadata(request.Headers.Authorization?.Parameter, logger);
         }
         return response;
+    }
+
+    internal static void LogUnvalidatedBearerMetadata(string? token, ILogger logger)
+    {
+        // Comparison metadata is not token validation or authorization evidence.
+        if (token is null || token.Length > 16384 || token.Split('.') is not [_, var payload, _]
+            || payload.Length > 8192)
+        {
+            logger.LogWarning("Unvalidated bearer metadata unavailable");
+            return;
+        }
+
+        try
+        {
+            payload = payload.Replace('-', '+').Replace('_', '/');
+            payload = payload.PadRight(payload.Length + (4 - payload.Length % 4) % 4, '=');
+            using var claims = JsonDocument.Parse(Convert.FromBase64String(payload));
+            var root = claims.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                logger.LogWarning("Unvalidated bearer metadata unavailable");
+                return;
+            }
+
+            var audience = root.TryGetProperty("aud", out var aud)
+                && aud.ValueKind == JsonValueKind.String
+                && aud.GetString() == "https://cognitiveservices.azure.com"
+                    ? "https://cognitiveservices.azure.com" : "unrecognized";
+            long? expiry = root.TryGetProperty("exp", out var exp)
+                && exp.ValueKind == JsonValueKind.Number && exp.TryGetInt64(out var seconds)
+                && seconds >= 0 ? seconds : null;
+            var fingerprint = root.TryGetProperty("oid", out var oid)
+                && oid.ValueKind == JsonValueKind.String
+                ? FingerprintPrincipal(oid.GetString()) : null;
+            logger.LogWarning(
+                "Unvalidated bearer metadata: audience={Audience}, expires={Expires}, oidSha256={OidSha256}",
+                audience, expiry, fingerprint ?? "unavailable");
+        }
+        catch (Exception ex) when (ex is FormatException or JsonException)
+        {
+            logger.LogWarning("Unvalidated bearer metadata unavailable: {ErrorType}", ex.GetType().Name);
+        }
+    }
+
+    internal static string? FingerprintPrincipal(string? value) =>
+        value is { Length: 36 } && Guid.TryParseExact(value, "D", out var principal)
+            && principal != Guid.Empty
+                ? Convert.ToHexString(SHA256.HashData(Encoding.ASCII.GetBytes(principal.ToString("D"))))
+                : null;
+
+    private static void LogProviderRequestIds(HttpResponseMessage response, ILogger logger)
+    {
+        foreach (var header in new[] { "x-ms-request-id", "apim-request-id", "x-ms-correlation-request-id", "x-ms-correlation-id" })
+        {
+            if (!response.Headers.TryGetValues(header, out var values))
+                continue;
+            var ids = values.Take(2).ToArray();
+            if (ids is [var value] && value.Length == 36 && Guid.TryParseExact(value, "D", out var id))
+                logger.LogWarning("Native decision provider identifier: {Header}={Identifier}", header, id.ToString("D"));
+        }
     }
 }
