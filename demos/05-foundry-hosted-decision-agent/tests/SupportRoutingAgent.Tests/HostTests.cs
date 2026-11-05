@@ -3,13 +3,18 @@
  * Synthetic decision fixtures validate the HTTP/SSE contract without cloud inference.
  */
 using System.Net.Http.Json;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text.Json;
+using Azure.AI.AgentServer.Core;
 using ElBruno.AI.Decisions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Agents.AI.Foundry.Hosting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using OpenTelemetry;
+using OpenTelemetry.Trace;
 using SupportRouting;
 using Xunit;
 
@@ -67,6 +72,33 @@ public sealed class HostTests
         Assert.Contains("response.failed", body);
         Assert.DoesNotContain("response.completed", body);
         Assert.DoesNotContain("Suggested team:", body);
+    }
+
+    [Fact]
+    public async Task AgentHostCollectorReceivesNativeDecisionActivity()
+    {
+        var spans = new ConcurrentBag<Activity>();
+        var fixture = new FixtureClient();
+        var agent = new SupportRoutingAgent(fixture);
+        var builder = AgentHost.CreateBuilder();
+        builder.ConfigureTracing(tracing => tracing.AddSource(SupportRoutingAgent.TelemetrySource)
+            .AddProcessor(new CaptureProcessor(spans)));
+        builder.Services.AddFoundryResponses(agent);
+        builder.RegisterProtocol("responses", endpoints => endpoints.MapFoundryResponses());
+        await using var app = builder.Build().App;
+        _ = app.Services.GetRequiredService<TracerProvider>();
+
+        await agent.RunAsync("synthetic ticket");
+
+        Assert.Equal(1, fixture.Calls);
+        var activity = Assert.Single(spans, span => span.DisplayName == "decision.route_support");
+        Assert.Equal(ActivityStatusCode.Ok, activity.Status);
+        Assert.Equal("choose", activity.GetTagItem("decision.operation"));
+    }
+
+    private sealed class CaptureProcessor(ConcurrentBag<Activity> spans) : BaseProcessor<Activity>
+    {
+        public override void OnEnd(Activity data) => spans.Add(data);
     }
 
     private static async Task<WebApplication> Start(FixtureClient fixture)

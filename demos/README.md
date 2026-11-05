@@ -7,12 +7,12 @@ There is no Ollama dependency. All model calls target existing authorized Foundr
 |---|---|---|
 | 01 `01-console-agent` | Simple MAF console | Foundry chat model, AzureCliCredential |
 | 02 `02-host-ready-agent` | Same behavior, local Responses host, not deployed | Same chat model, DefaultAzureCredential |
-| 03 `03-foundry-hosted-agent` | Responses host plus two read-only function tools | Same chat model, DefaultAzureCredential |
+| 03 `03-foundry-hosted-agent` | Responses host plus three read-only function tools | Same chat model, DefaultAzureCredential |
 | 04 `04-local-decision-agent` | Local MAF console, no HTTP host | Foundry Microsoft-Decision-1, AzureCliCredential |
 | 05 `05-foundry-hosted-decision-agent` | Same decision logic in Foundry Responses host | Same native decision deployment, AzureCliCredential locally, DefaultAzureCredential hosted |
 
 Stage 03 retains 02's hosting registrations, project and lock, but now
-adds two in-process tools and their tracing source. Their Program.cs files are
+adds three in-process tools and their tracing source. Their Program.cs files are
 intentionally different; Demo 02 stays unchanged. Demo 04 links Demo 05's routing
 logic and contracts. Keep the whole bundle together. Model deployment and agent
 hosting are different operations.
@@ -96,36 +96,48 @@ readiness alone does not establish inference or production capabilities.
 ## Demo 03
 
 Show the deployed agent in the selected project's Foundry Agents page,
-Playground and Versions, then compare its source with Demo 02. V08 adds two
+Playground and Versions, then compare its source with Demo 02. V08 adds three
 deterministic read-only functions in `DemoTools.cs`: `GetDotNetFact()` returns a
-fixed .NET garbage-collector fact, and `AddNumbers(a, b)` returns a checked integer
-sum. They need no external service or additional credentials. Basic greetings and
-the Responses host remain available. No tool changes have been deployed by this
-revision. An older hosted version cannot demonstrate the new tools.
+fixed .NET garbage-collector fact, `AddNumbers(a, b)` returns a checked integer
+sum, and `CountWords(text)` counts whitespace-separated words. They need no
+external service or additional credentials. Basic greetings and the Responses
+host remain available.
 
-After a separately authorized redeployment, use this exact Playground prompt:
+The previously deployed `netconf-hello-agent:1` completed a real hosted response
+with the earlier two-tool source. Its Foundry Traces view showed
+`execute_tool GetDotNetFact` and `execute_tool AddNumbers`. The current three-tool
+source is awaiting the requested redeployment. Do not present the earlier
+version as containing `CountWords` or promise an exact total span count. The
+earlier view also displayed `execute_tool multi_tool_use.parallel`, which is not
+one of this demo's registered C# functions.
 
-```text
-Call GetDotNetFact to get the demo's .NET fact, then call AddNumbers with a=19 and b=23. Use both tool results in a brief answer. Do not calculate the sum yourself.
-```
-
-Expected tool results: `The .NET garbage collector automatically reclaims memory
-occupied by unreachable objects.` and `42`. Final model wording can vary. For a
-single-tool demonstration, use either prompt:
+Use the current source prompts after the new version is deployed:
 
 ```text
 Call GetDotNetFact and tell me the demo's .NET fact.
 ```
 
 ```text
-Call AddNumbers with a=19 and b=23 and report the tool result.
+Call AddNumbers with a=19 and b=23 and report the tool result. Do not calculate it yourself.
 ```
 
-Open **Agents > Traces** in the hosting project and find that invocation by its
-Trace ID or Response ID. Expand the tool-orchestration subtree and look for
-`execute_tool GetDotNetFact` and `execute_tool AddNumbers`, with
-`gen_ai.operation.name=execute_tool` and the matching `gen_ai.tool.name`. Tool
-spans prove execution; a fluent answer containing 42 alone does not.
+```text
+Call CountWords on this exact text: "Foundry traces show real tool calls". Report only the tool result.
+```
+
+```text
+Call AddNumbers with a=19 and b=23, then call CountWords on this exact text: "Foundry traces show real tool calls". Report both tool results.
+```
+
+Expected outputs are the fixed .NET garbage-collector fact, `42`, and `6`.
+Final model wording and call order can vary.
+
+Open **Agents > Traces** in the hosting project and find the completed
+invocation by its Trace ID or Response ID. Inspect the named
+`execute_tool GetDotNetFact`, `execute_tool AddNumbers`, and
+`execute_tool CountWords` spans. Confirm `gen_ai.operation.name=execute_tool`
+and the matching `gen_ai.tool.name`. A fluent answer alone does not prove tool
+execution. The new version's CountWords span is not hosted-verified yet.
 
 The pinned .NET client is instrumented with `UseOpenTelemetry` before MAF builds
 its function-invocation loop. `ConfigureTracing(...AddSource(...))` subscribes the
@@ -134,7 +146,7 @@ These are real SDK spans, not handwritten log messages. Raw prompt, argument and
 result capture remains disabled. Foundry trace visibility still requires a
 configured telemetry destination, linked Application Insights and existing reader
 access. No telemetry resource, content-capture setting or permissions are changed.
-Local tests/inference are not proof that a future hosted version exports traces.
+Local tests/inference are not proof that a newly deployed version exports traces.
 See [hosted tracing](https://learn.microsoft.com/azure/foundry/observability/quickstarts/quickstart-tracing-hosted-agent)
 and [.NET agent observability](https://learn.microsoft.com/agent-framework/agents/observability).
 
@@ -210,10 +222,20 @@ these aliases with `azd env set` in the selected environment; do not assume the
 setup file or process values populate azd. `azd deploy netconf-support-routing
 --no-prompt` publishes a version but never proves native-model permission.
 
+The previously deployed `netconf-support-routing:1` completed a real hosted
+billing decision after an owner-approved account-level Cognitive Services User
+assignment. This role is broad and includes key/secret reads; this observed
+success does not make it an inference-only or least-privilege recommendation.
+The current source adds a named `decision.route_support` activity around the
+actual native Decision call. A new deployment and verification of this activity
+in the hosted trace are pending.
+
 Two identity hops matter: caller to hosted endpoint, then current agent-instance
 identity to the native decision resource. AzureCliCredential is used locally;
-DefaultAzureCredential is used in Foundry. Verify which runtime credential and
-principal it selects; the current source choice has not been redeployed.
+DefaultAzureCredential is used in Foundry. The successful version-1 trace
+showed DefaultAzureCredential and MSI token retrieval. Verify the runtime path
+again after redeployment rather than assuming a new version selects the same
+identity.
 The [hosted-agent token service](https://learn.microsoft.com/azure/foundry/agents/concepts/hosted-agent-token-service)
 can issue the current agent-instance identity, **not the project managed identity**.
 A token alone grants no downstream permission. Do not copy developer credentials

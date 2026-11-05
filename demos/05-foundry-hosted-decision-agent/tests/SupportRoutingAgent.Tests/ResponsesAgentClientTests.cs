@@ -33,17 +33,17 @@ public sealed class ResponsesAgentClientTests
         var client = new ResponsesAgentClient(
             http,
             credential,
-            new Uri("https://example.services.ai.azure.com/agents/support-routing/protocols/openai/"),
-            "support-routing");
+            new Uri("https://example.services.ai.azure.com/agents/netconf-support-routing/protocols/openai/"),
+            "netconf-support-routing");
 
         var result = await client.InvokeAsync("synthetic duplicate charge");
 
-        Assert.Equal("https://example.services.ai.azure.com/agents/support-routing/protocols/openai/responses", handler.Url);
+        Assert.Equal("https://example.services.ai.azure.com/agents/netconf-support-routing/protocols/openai/responses", handler.Url);
         Assert.Equal("https://ai.azure.com/.default", credential.Scope);
         Assert.Equal("Bearer synthetic-access-token", handler.Authorization);
         Assert.False(handler.HasApiKey);
         using var request = JsonDocument.Parse(handler.Body!);
-        Assert.Equal("support-routing", request.RootElement.GetProperty("model").GetString());
+        Assert.Equal("netconf-support-routing", request.RootElement.GetProperty("model").GetString());
         Assert.Equal("synthetic duplicate charge", request.RootElement.GetProperty("input").GetString());
         Assert.False(request.RootElement.GetProperty("stream").GetBoolean());
         Assert.False(request.RootElement.GetProperty("store").GetBoolean());
@@ -96,8 +96,8 @@ public sealed class ResponsesAgentClientTests
         new(
             http,
             credential,
-            new Uri("https://example.services.ai.azure.com/agents/support-routing/protocols/openai/"),
-            "support-routing");
+            new Uri("https://example.services.ai.azure.com/agents/netconf-support-routing/protocols/openai/"),
+            "netconf-support-routing");
 
     private sealed class FixtureCredential : TokenCredential
     {

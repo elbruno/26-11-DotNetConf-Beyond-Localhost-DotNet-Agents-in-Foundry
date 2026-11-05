@@ -15,6 +15,7 @@ using SupportRouting;
 [assembly: InternalsVisibleTo("SupportRoutingAgent.Tests")]
 
 var builder = AgentHost.CreateBuilder(args);
+builder.ConfigureTracing(tracing => tracing.AddSource(SupportRoutingAgent.TelemetrySource));
 var endpoint = DemoSettings.Read("Decision__Endpoint");
 var deployment = DemoSettings.Read("Decision__Deployment");
 

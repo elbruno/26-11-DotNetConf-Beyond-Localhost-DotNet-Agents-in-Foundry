@@ -8,17 +8,16 @@ The manifest uses the installed CLI's `env` mapping and bundled .NET publishing:
 remote-build ZIP packaging omitted the sibling contracts and linked source.
 Keep the complete five-demo bundle together. Run setup once as described in
 [the session demo guide](../README.md); future local runs reuse the ignored JSON.
-The upstream instructions below remain reference material, not proof of a
-successful cloud invocation. Hosted native Decision access still requires
-separately approved agent-instance authorization.
 V08 uses `AzureCliCredential` locally and `DefaultAzureCredential` in Foundry.
-Changing the credential class does not grant inference permission or prove which
-identity the hosted default chain selects. This source change is not deployed.
-The source and manifest target `netconf-support-routing`. This is a new agent
-name, not a rename or new version
-of `support-routing`. Existing agents are preserved. A new named agent can have
-a different instance principal; never copy role assignments or reuse evidence of
-the old principal as proof of the new agent's access.
+The previously deployed `netconf-support-routing:1` completed a real hosted
+billing decision after an owner-approved account-level Cognitive Services User
+assignment. This role is broad and includes key/secret reads; this observed
+success does not make it an inference-only or least-privilege recommendation.
+The sample creates no role assignments. The source and manifest target
+`netconf-support-routing`, separate from the preserved `support-routing` agent.
+The current source adds a named `decision.route_support` activity around the
+actual native decision call. Its redeployment and new hosted trace verification
+are pending.
 The transport adds bounded 401 diagnostics for challenge, unvalidated token
 audience and expiry only. It never logs bearer tokens, other claims or ticket text.
 
@@ -44,6 +43,8 @@ public `RoutingDecision` contract is kept in its own project.
   `0`.
 - The answer is a deterministic confirmation suggestion, not generated
   reasoning or an action. A person must confirm the route.
+- The hosted source emits a `decision.route_support` activity around the actual
+  native call. It records fixed operation metadata, not ticket text or results.
 - The agent accepts exactly one non-empty text message of at most 64 KiB in
   UTF-8. It rejects conversation history, system messages, and non-text input.
 - Cancellation, authorization errors, and provider failures remain failures.
@@ -106,12 +107,11 @@ authorization guidance identifies **Foundry Agent Consumer** at the project or
 individual-agent scope as the least-privilege built-in role for endpoint-only
 callers. See [Configure agent endpoint authorization](https://learn.microsoft.com/azure/foundry/agents/how-to/configure-agent-endpoint-authorization?WT.mc_id=academic-105485-koreyst).
 
-The agent-instance identity's native decision-inference permission must be
-verified for the target Foundry resource. A prior prototype only established
-that an account-scoped **Foundry User** assignment worked in one environment.
-That assignment is broad and is not recommended here as a least-privilege
-answer. This sample creates no role assignments and does not widen access
-automatically. Confirm the currently supported inference role and narrowest
+Native Decision inference uses the hosted agent identity, not the caller identity.
+A real version-1 invocation succeeded after a broad, owner-approved account-level
+role assignment. The built-in role includes key/secret reads and is not a
+least-privilege answer. This sample creates no role assignments and does not
+widen access automatically. Confirm the supported inference role and narrowest
 scope with the resource owner before deployment.
 
 ## Run offline tests
@@ -291,13 +291,29 @@ protocol storage are separate controls. The native transport logger records no
 request body, response body, ticket text, or credentials. Do not commit `.azure`
 state, tokens, private endpoints, or logs.
 
-No live deployment or Foundry portal capture was performed while preparing this
-sample. Do not treat the offline tests as live inference evidence or fabricate
-screenshots. Before publication, run the sample in an authorized test project
-and capture genuine portal conversation and trace views with synthetic data,
-redacting tokens and personal identifiers. If Foundry does not expose a native
-decision-model span, document the supported instrumentation and capture the
-actual available view instead.
+A previous version-1 hosted invocation completed a synthetic billing decision.
+Its Foundry Trajectories view showed the hosted invocation, successful native
+SystemOne HTTP call, and a state-store 404 followed by a successful 201 for the
+new session. The displayed error count referred to that expected state-store
+lookup, not the successful decision. The current source adds the named
+`decision.route_support` activity, which is not yet deployed or verified in the
+hosted trace. After redeployment, inspect the real trace and confirm the named
+activity's parent and the native HTTP dependency beneath it. Do not call it
+`execute_tool` or claim it is a model-generated tool. Offline tests verify local
+activity creation, status, cancellation/error propagation and collection by
+the AgentHost provider; they do not prove hosted telemetry or Foundry UI
+visibility. In the previous Graph view, **Show all spans** was required to
+reveal the SystemOne dependency and the initial state-store GET 404; Trajectories
+showed them directly. Verify both views again after the new deployment. Do not
+fabricate screenshots or hide actual exporter failures. Separate v1 traces have
+also shown observability exporter/token HTTP 403 dependencies. The pinned
+Agent365 exporter and inspected Microsoft OpenTelemetry v1.2.0 source do not
+wrap token acquisition and HTTP export in instrumentation suppression. This is
+consistent with, but does not prove, exporter self-instrumentation. No supported
+documented hook to replace or wrap the host-managed exporter was found in the
+pinned AgentHost surface, so no targeted fix is included. These failures remain
+distinct from the successful native Decision call. Keep real exporter failures
+visible and verify current behavior after redeployment.
 
 ## Decision API evolution
 

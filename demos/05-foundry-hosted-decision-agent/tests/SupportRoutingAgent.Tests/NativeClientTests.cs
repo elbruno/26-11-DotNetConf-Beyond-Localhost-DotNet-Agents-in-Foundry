@@ -6,6 +6,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Azure.Core;
+using Azure.Identity;
 using ElBruno.AI.Decisions;
 using ElBruno.AI.Decisions.Foundry;
 using SupportRouting;
@@ -15,6 +16,16 @@ namespace SupportRoutingTests;
 
 public sealed class NativeClientTests
 {
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void LocalHostUsesOnlyAzureCliCredential(string? hostingEnvironment) =>
+        Assert.IsType<AzureCliCredential>(Program.CreateDecisionCredential(hostingEnvironment));
+
+    [Fact]
+    public void FoundryHostUsesDefaultAzureCredential() =>
+        Assert.IsType<DefaultAzureCredential>(Program.CreateDecisionCredential("foundry"));
+
     [Fact]
     public async Task CallsNativeSystemOneWithExplicitCredential()
     {

@@ -1,4 +1,4 @@
-// Purpose: Expose netconf-hello-agent and two read-only tools through Foundry Responses.
+// Purpose: Expose netconf-hello-agent and three read-only tools through Foundry Responses.
 // Requires the same project, deployment, and authorized identity as Demo 1.
 // Expected result: an HTTP host; a response still requires a real Foundry model call.
 using Azure.AI.AgentServer.Core;
@@ -20,6 +20,7 @@ AIAgent agent = new AIProjectClient(projectEndpoint, new DefaultAzureCredential(
             You are a friendly assistant. Keep your answers brief.
             When asked for the demo's .NET fact, call GetDotNetFact.
             When asked to add two integers, call AddNumbers instead of calculating yourself.
+            When asked to count words in supplied text, call CountWords.
             Use the tool results in your answer.
             """,
         name: "netconf-hello-agent",
