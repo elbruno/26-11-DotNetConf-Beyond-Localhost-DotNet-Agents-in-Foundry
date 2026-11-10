@@ -11,7 +11,7 @@ using Microsoft.Agents.AI.Foundry.Hosting;
 var projectEndpoint = new Uri(DemoSettings.Read("FOUNDRY_PROJECT_ENDPOINT"));
 var deployment = DemoSettings.Read("AZURE_AI_MODEL_DEPLOYMENT_NAME");
 
-AIAgent agent = new AIProjectClient(projectEndpoint, new DefaultAzureCredential())
+AIAgent agent = new AIProjectClient(projectEndpoint, new AzureCliCredential())
     .AsAIAgent(
         model: deployment,
         instructions: "You are a friendly assistant. Keep your answers brief.",

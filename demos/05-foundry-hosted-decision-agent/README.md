@@ -1,19 +1,15 @@
 # DecisionAgent-01-FoundryHosted
 
-Session adaptation of the MIT upstream sample at commit
-`00b60a8a95ad57d5ef975bb914a87f1cec76e049`. Dependency pins, routing logic,
-contracts, license and notices are unchanged. The host now uses the shared
-non-secret settings loader from `..\shared`, and its project links that file.
-The manifest uses the installed CLI's `env` mapping and bundled .NET publishing:
-remote-build ZIP packaging omitted the sibling contracts and linked source.
-Keep the complete five-demo bundle together. Run setup once as described in
-[the session demo guide](../README.md); future local runs reuse the ignored JSON.
-V08 uses `AzureCliCredential` locally and `DefaultAzureCredential` in Foundry.
-Native Decision inference uses the hosted agent identity, not the caller
-identity. The sample creates no role assignments. Have the resource owner
-confirm the supported permission and narrowest scope before deployment. An
-offline test or successful HTTP exchange does not prove that hosted inference
-will complete.
+This sample demonstrates a Foundry-hosted .NET support-routing agent that uses
+Microsoft Decision-1 through the native decision API. It is based on the MIT
+upstream sample at commit
+`00b60a8a95ad57d5ef975bb914a87f1cec76e049`; see
+[source attribution and notices](THIRD-PARTY-NOTICES.md).
+
+The sample uses a local configuration helper for non-secret endpoints and
+deployment names. Local execution, hosted-agent publication, and model access
+are separate steps. Follow the [demo guide](../README.md) for shared setup and
+consult the Azure and Foundry documentation before configuring a deployment.
 
 A .NET 10 sample that routes synthetic support tickets with
 **Microsoft-Decision-1**, a native Microsoft Foundry decision model. A custom
@@ -277,7 +273,7 @@ project endpoint or decision resource root here:
 
 ```powershell
 $env:AGENT_OPENAI_BASE_URL = 'https://<agent-endpoint-base-url>/'
-$env:AGENT_NAME = 'netconf-support-routing'
+$env:AGENT_NAME = '<hosted-agent-name>'
 dotnet run --project .\src\SupportRoutingCaller -c Release -- `
     'I was charged twice for my subscription.'
 ```
