@@ -32,11 +32,39 @@ To open the local Responses host for Demo 02, run `azd ai agent run` from `demos
 
 ## Windows Azure CLI lookup
 
-Some local examples use `AzureCliCredential`. If Azure CLI is installed but a child process cannot find it, prepend its directory to `PATH` in the same PowerShell 7 terminal before launching the demo:
+With an inherited `PATH` longer than 8,191 characters, `cmd.exe` may fail to resolve Azure CLI when `AzureCliCredential` starts a child process, even when PowerShell resolves `az`. Try the normal Demo 04 command first. Use this workaround only when the failure is specifically child-process Azure CLI discovery.
+
+From the bundle root, configure Demo 04 settings and ensure Azure CLI is already signed in. This temporarily narrows `PATH` for the current process to the detected Azure CLI and .NET directories plus Windows system directories, runs Demo 04, and restores the original value in `finally`. It does not change persistent environment settings or guarantee authentication.
+
+**Running Demo 04 makes a request to the configured Decision-1 model and may incur Azure charges.**
 
 ```powershell
-$azCliPath = (Get-Command az.cmd -ErrorAction Stop).Source
-$env:PATH = "$(Split-Path -Parent $azCliPath);$env:PATH"
-```
+$originalPath = $env:PATH
+try {
+    $az = Get-Command az -CommandType Application -ErrorAction Stop | Select-Object -First 1
+    $dotnet = Get-Command dotnet -CommandType Application -ErrorAction Stop | Select-Object -First 1
+    $pathDirectories = @(
+        (Split-Path -Parent $az.Source)
+        (Split-Path -Parent $dotnet.Source)
+        (Join-Path $env:SystemRoot 'System32')
+        $env:SystemRoot
+    ) | Where-Object { $_ } | Select-Object -Unique
 
-This affects only the current PowerShell process and its child processes. It does not change the user or machine `PATH` or sign in to Azure.
+    $temporaryPath = $pathDirectories -join ';'
+    if ($temporaryPath.Length -gt 8191) {
+        throw 'The detected tool directories still exceed the cmd.exe PATH limit.'
+    }
+
+    $env:PATH = $temporaryPath
+    Write-Host "Temporary process PATH: $($env:PATH.Length) characters"
+    & $az.Source --version
+    if ($LASTEXITCODE -ne 0) { throw 'Azure CLI did not run with the temporary PATH.' }
+    & $dotnet.Source --version
+    if ($LASTEXITCODE -ne 0) { throw '.NET SDK did not run with the temporary PATH.' }
+    & $dotnet.Source run --project .\demos\04-local-decision-agent\LocalDecisionAgent.csproj
+    if ($LASTEXITCODE -ne 0) { throw "Demo 04 exited with code $LASTEXITCODE." }
+}
+finally {
+    $env:PATH = $originalPath
+}
+```
