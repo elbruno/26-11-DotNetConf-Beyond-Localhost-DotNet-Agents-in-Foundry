@@ -29,3 +29,14 @@ dotnet run --project .\demos\04-local-decision-agent\LocalDecisionAgent.csproj
 ```
 
 To open the local Responses host for Demo 02, run `azd ai agent run` from `demos\02-host-ready-agent`. Hosted examples require separately configured Foundry resources and identities; consult their README files and current Foundry documentation before deployment.
+
+## Windows Azure CLI lookup
+
+Some local examples use `AzureCliCredential`. If Azure CLI is installed but a child process cannot find it, prepend its directory to `PATH` in the same PowerShell 7 terminal before launching the demo:
+
+```powershell
+$azCliPath = (Get-Command az.cmd -ErrorAction Stop).Source
+$env:PATH = "$(Split-Path -Parent $azCliPath);$env:PATH"
+```
+
+This affects only the current PowerShell process and its child processes. It does not change the user or machine `PATH` or sign in to Azure.
