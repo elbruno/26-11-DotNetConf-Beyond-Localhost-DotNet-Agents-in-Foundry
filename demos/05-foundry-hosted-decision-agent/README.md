@@ -1,16 +1,5 @@
 # DecisionAgent-01-FoundryHosted
 
-This sample demonstrates a Foundry-hosted .NET support-routing agent that uses
-Microsoft Decision-1 through the native decision API. It is based on the MIT
-upstream sample at commit
-`00b60a8a95ad57d5ef975bb914a87f1cec76e049`; see
-[source attribution and notices](THIRD-PARTY-NOTICES.md).
-
-The sample uses a local configuration helper for non-secret endpoints and
-deployment names. Local execution, hosted-agent publication, and model access
-are separate steps. Follow the [demo guide](../README.md) for shared setup and
-consult the Azure and Foundry documentation before configuring a deployment.
-
 A .NET 10 sample that routes synthetic support tickets with
 **Microsoft-Decision-1**, a native Microsoft Foundry decision model. A custom
 Microsoft Agent Framework `AIAgent` calls the model through the native
@@ -33,8 +22,6 @@ public `RoutingDecision` contract is kept in its own project.
   `0`.
 - The answer is a deterministic confirmation suggestion, not generated
   reasoning or an action. A person must confirm the route.
-- The hosted source emits a `decision.route_support` activity around the actual
-  native call. It records fixed operation metadata, not ticket text or results.
 - The agent accepts exactly one non-empty text message of at most 64 KiB in
   UTF-8. It rejects conversation history, system messages, and non-text input.
 - Cancellation, authorization errors, and provider failures remain failures.
@@ -85,10 +72,7 @@ Keep the four endpoints and identities distinct:
 | `AGENT_OPENAI_BASE_URL` | OpenAI-compatible base URL for the deployed Hosted Agent | C# caller |
 
 Locally, `AzureCliCredential` represents the developer. In Foundry, the agent
-uses `DefaultAzureCredential` for the native decision request. Verify the selected
-runtime credential and principal in the deployed environment rather than
-assuming that the chain selects the intended agent-instance identity. Never put
-developer credentials in the hosted agent to work around missing permissions. The
+uses its system-assigned managed identity for the native decision request. The
 C# caller uses the caller's Azure CLI identity to invoke the agent endpoint.
 An endpoint token does not itself grant permission to invoke that endpoint.
 
@@ -97,10 +81,13 @@ authorization guidance identifies **Foundry Agent Consumer** at the project or
 individual-agent scope as the least-privilege built-in role for endpoint-only
 callers. See [Configure agent endpoint authorization](https://learn.microsoft.com/azure/foundry/agents/how-to/configure-agent-endpoint-authorization?WT.mc_id=academic-105485-koreyst).
 
-Native Decision inference uses the hosted agent identity, not the caller
-identity. This sample creates no role assignments and does not widen access
-automatically. Confirm the supported inference role and narrowest scope with
-the resource owner before deployment.
+The agent-instance identity's native decision-inference permission must be
+verified for the target Foundry resource. A prior prototype only established
+that an account-scoped **Foundry User** assignment worked in one environment.
+That assignment is broad and is not recommended here as a least-privilege
+answer. This sample creates no role assignments and does not widen access
+automatically. Confirm the currently supported inference role and narrowest
+scope with the resource owner before deployment.
 
 ## Run offline tests
 
@@ -129,24 +116,9 @@ dotnet run --project .\src\SupportRoutingAgent -c Release --no-launch-profile
 
 The local Responses host has no application authentication. Keep the port
 private, do not expose or tunnel it, and use only synthetic ticket text. The
-decision transport reports HTTP status and bounded, sanitized authentication
-diagnostics without logging bearer tokens or ticket text. It checks JSON value
-kinds before reading allowlisted provider error fields; unexpected shapes and
-invalid JSON produce fixed safe diagnostics without replacing the HTTP failure.
-On a native HTTP 401, the allowlisted diagnostics are attached to the same
-`decision.route_support` activity as custom tags. They include only challenge
-presence, fixed provider error indicators, GUID-shaped provider correlation
-IDs, the exact allowed audience or `unrecognized`, a bounded expiry value, and
-a SHA-256 fingerprint of a normalized GUID-shaped `oid`. Raw tokens, principal
-GUIDs, arbitrary claims or headers, provider bodies, and ticket text are never
-added to the activity tags. A successful native response emits only the
-`native_decision.failure_diagnostics_wired=true` tag, with no token metadata.
-This marker verifies instrumentation wiring, not telemetry ingestion or
-authorization. Available status, header and bounded token metadata remain
-attached if reading the 401 body fails or is canceled; the failure or
-cancellation still propagates. The
-Foundry host disables GenAI message-content capture in telemetry, but telemetry
-settings are separate from protocol/session storage.
+decision transport logs HTTP status only. The Foundry host disables GenAI
+message-content capture in telemetry, but telemetry settings are separate from
+protocol/session storage.
 
 In another PowerShell terminal, send a synthetic ticket:
 
@@ -227,8 +199,9 @@ does not create a Foundry project or configure role assignments.
    is local and ignored by Git.
 
 3. Before deployment, verify the hosted agent identity can call the decision
-   deployment at the narrowest supported scope. This sample creates no role
-   assignments. Then deploy the code from this directory:
+   deployment at the narrowest supported scope. Do not copy the prototype's
+   broad account-level role assignment as a workaround. Then deploy the code
+   from this directory:
 
    ```powershell
    azd deploy
@@ -262,10 +235,8 @@ The standalone caller requests an Entra token for
 `https://ai.azure.com/.default`, sends `model`, `input`, `stream: false`, and
 `store: false` to the agent's OpenAI-compatible `/responses` endpoint, verifies
 the final status is `completed`, then deserializes the response text into the
-shared `RoutingDecision` type. The caller adds the required `api-version=v1`
-query parameter while preserving the endpoint path and any other query
-parameters. Non-success HTTP responses, missing output, and `response.failed`
-are exceptions, not successful decisions.
+shared `RoutingDecision` type. Non-success HTTP responses, missing output, and
+`response.failed` are exceptions, not successful decisions.
 
 Set `AGENT_OPENAI_BASE_URL` to the agent's OpenAI-compatible base URL from the
 deployed agent details, and `AGENT_NAME` to the hosted agent name. Do not use the
@@ -273,7 +244,7 @@ project endpoint or decision resource root here:
 
 ```powershell
 $env:AGENT_OPENAI_BASE_URL = 'https://<agent-endpoint-base-url>/'
-$env:AGENT_NAME = '<hosted-agent-name>'
+$env:AGENT_NAME = 'support-routing'
 dotnet run --project .\src\SupportRoutingCaller -c Release -- `
     'I was charged twice for my subscription.'
 ```
@@ -282,19 +253,6 @@ The caller uses `AzureCliCredential`; sign in as the caller identity and grant
 the endpoint interaction permission at project or agent scope. The request
 sets `store` to `false` and uses no previous response ID. If you instead create
 a session with the `azd` CLI, stop only the session ID from that invocation.
-
-After a completed response, the caller keeps the typed decision JSON on
-standard output and writes the validated Foundry response ID to standard error.
-Copy that ID into the Foundry agent's **Traces** search to open the matching
-invocation. If the Graph view hides dependencies, select **Show all spans** and
-inspect the decision activity and native request status. Do not infer a match
-from timestamps alone. If the response ID is missing or malformed, the caller
-states that trace correlation is unavailable. The caller validates the response
-ID before checking terminal status, so an HTTP 200 response with a non-completed
-status also reports its status and any valid ID on standard error, exits
-unsuccessfully, and emits no decision JSON. Search that exact ID to inspect a
-failed invocation; an absent or malformed ID is reported as unavailable
-correlation.
 
 ## Costs, data handling, and publication evidence
 
@@ -308,16 +266,13 @@ protocol storage are separate controls. The native transport logger records no
 request body, response body, ticket text, or credentials. Do not commit `.azure`
 state, tokens, private endpoints, or logs.
 
-The hosted source emits a `decision.route_support` activity around the actual
-native Decision call. It is not a function tool and should not be described as
-`execute_tool` or as a model-generated tool. Offline tests verify local activity
-creation, status, cancellation/error propagation and collection by the
-AgentHost provider; they do not prove hosted permissions or inference success.
-
-For a completed caller run, use its response ID to search the agent's Foundry
-Traces view. If Graph hides the native dependency, choose **Show all spans**,
-then verify the decision activity and native request status. Do not infer a
-match from timestamps alone or hide exporter failures.
+No live deployment or Foundry portal capture was performed while preparing this
+sample. Do not treat the offline tests as live inference evidence or fabricate
+screenshots. Before publication, run the sample in an authorized test project
+and capture genuine portal conversation and trace views with synthetic data,
+redacting tokens and personal identifiers. If Foundry does not expose a native
+decision-model span, document the supported instrumentation and capture the
+actual available view instead.
 
 ## Decision API evolution
 

@@ -5,18 +5,21 @@ services:
   existing-project:
     host: azure.ai.project
     endpoint: ${AZURE_AI_PROJECT_ENDPOINT}
-  netconf-support-routing:
+  support-routing:
     project: ./src/SupportRoutingAgent
     host: azure.ai.agent
     language: csharp
     uses:
       - existing-project
-    env:
-      Decision__Endpoint: ${DECISION_ENDPOINT}
-      Decision__Deployment: ${DECISION_DEPLOYMENT}
-      OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: "false"
+    environmentVariables:
+      - name: Decision__Endpoint
+        value: ${DECISION_ENDPOINT}
+      - name: Decision__Deployment
+        value: ${DECISION_DEPLOYMENT}
+      - name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT
+        value: "false"
     codeConfiguration:
-      dependencyResolution: bundled
+      dependencyResolution: remote_build
       entryPoint: SupportRoutingAgent.dll
       runtime: dotnet_10
     container:
@@ -24,7 +27,7 @@ services:
         cpu: "0.5"
         memory: 1Gi
     kind: hosted
-    name: netconf-support-routing
+    name: support-routing
     protocols:
       - protocol: responses
         version: 2.0.0

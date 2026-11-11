@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
-    <TargetFramework>net11.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
@@ -12,9 +12,5 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\SupportRouting.Contracts\SupportRouting.Contracts.csproj" />
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Include="..\..\..\shared\DemoSettings.cs" Link="DemoSettings.cs" />
-    <None Include="..\..\..\shared\demo-settings.local.json" Link="demo-settings.local.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" Condition="Exists('..\..\..\shared\demo-settings.local.json')" />
   </ItemGroup>
 </Project>

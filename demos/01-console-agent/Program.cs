@@ -6,8 +6,10 @@ using Azure.Identity;
 using Microsoft.Agents.AI;
 
 // Step 1: Require the existing project and deployment explicitly.
-var projectEndpoint = new Uri(DemoSettings.Read("FOUNDRY_PROJECT_ENDPOINT"));
-var deployment = DemoSettings.Read("AZURE_AI_MODEL_DEPLOYMENT_NAME");
+var projectEndpoint = new Uri(Environment.GetEnvironmentVariable("FOUNDRY_PROJECT_ENDPOINT")
+    ?? throw new InvalidOperationException("Set FOUNDRY_PROJECT_ENDPOINT before running."));
+var deployment = Environment.GetEnvironmentVariable("AZURE_AI_MODEL_DEPLOYMENT_NAME")
+    ?? throw new InvalidOperationException("Set AZURE_AI_MODEL_DEPLOYMENT_NAME before running.");
 
 // Step 2: Give the model a name and a small, easy-to-explain instruction.
 AIAgent agent = new AIProjectClient(projectEndpoint, new AzureCliCredential())

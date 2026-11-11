@@ -3,8 +3,6 @@
  * The fixture verifies the public contract and the input, cancellation, and failure boundaries.
  */
 using System.Text.Json;
-using System.Collections.Concurrent;
-using System.Diagnostics;
 using ElBruno.AI.Decisions;
 using Microsoft.Extensions.AI;
 using SupportRouting;
@@ -22,9 +20,7 @@ public sealed class AgentTests
     public async Task PreservesDecisionAndAddsOnlyTemplate(string route)
     {
         var fixture = new FixtureClient(route);
-        var agent = new SupportRoutingAgent(fixture);
-        Assert.Equal("netconf-support-routing", agent.Name);
-        var response = await agent.RunAsync("synthetic ticket");
+        var response = await new SupportRoutingAgent(fixture).RunAsync("synthetic ticket");
 
         using var json = JsonDocument.Parse(response.Messages.Single().Text!);
         Assert.Equal(route, json.RootElement.GetProperty("team").GetString());
@@ -140,62 +136,6 @@ public sealed class AgentTests
     }
 
     [Fact]
-    public async Task DecisionActivityWrapsTheActualCallWithoutTicketContent()
-    {
-        var spans = new ConcurrentBag<Activity>();
-        using var listener = CreateDecisionActivityListener(spans);
-        using var parent = new Activity("routing-test").Start();
-        var fixture = new FixtureClient();
-
-        await new SupportRoutingAgent(fixture).RunAsync("synthetic private ticket");
-
-        var activity = Assert.Single(spans);
-        Assert.Equal("decision.route_support", activity.DisplayName);
-        Assert.Equal(parent.TraceId, activity.TraceId);
-        Assert.Equal(parent.SpanId, activity.ParentSpanId);
-        Assert.Equal(ActivityStatusCode.Ok, activity.Status);
-        Assert.Equal("choose", activity.GetTagItem("decision.operation"));
-        Assert.Equal(4, activity.GetTagItem("decision.options.count"));
-        Assert.DoesNotContain(activity.TagObjects, tag =>
-            tag.Value?.ToString()?.Contains("synthetic private ticket", StringComparison.Ordinal) == true);
-        Assert.Equal(1, fixture.Calls);
-    }
-
-    [Fact]
-    public async Task DecisionActivityMarksProviderFailureAndPreservesIt()
-    {
-        var spans = new ConcurrentBag<Activity>();
-        using var listener = CreateDecisionActivityListener(spans);
-        var fixture = new FixtureClient { Failure = new DecisionException("Synthetic failure") };
-
-        await Assert.ThrowsAsync<DecisionException>(() =>
-            new SupportRoutingAgent(fixture).RunAsync("synthetic ticket"));
-
-        var activity = Assert.Single(spans);
-        Assert.Equal(ActivityStatusCode.Error, activity.Status);
-        Assert.Equal("Decision call failed", activity.StatusDescription);
-        Assert.Equal(1, fixture.Calls);
-    }
-
-    [Fact]
-    public async Task DecisionActivityMarksCancellationAndPreservesIt()
-    {
-        var spans = new ConcurrentBag<Activity>();
-        using var listener = CreateDecisionActivityListener(spans);
-        using var cancellation = new CancellationTokenSource();
-        cancellation.Cancel();
-        var fixture = new FixtureClient();
-
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            new SupportRoutingAgent(fixture).RunAsync("synthetic ticket", cancellationToken: cancellation.Token));
-
-        var activity = Assert.Single(spans);
-        Assert.Equal(ActivityStatusCode.Error, activity.Status);
-        Assert.Equal("Decision call canceled", activity.StatusDescription);
-        Assert.Equal(0, fixture.Calls);
-    }
-
-    [Fact]
     public async Task PropagatesCancellation()
     {
         using var cts = new CancellationTokenSource();
@@ -203,18 +143,6 @@ public sealed class AgentTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             new SupportRoutingAgent(new FixtureClient()).RunAsync("ticket", cancellationToken: cts.Token));
-    }
-
-    private static ActivityListener CreateDecisionActivityListener(ConcurrentBag<Activity> spans)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == SupportRoutingAgent.TelemetrySource,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = spans.Add
-        };
-        ActivitySource.AddActivityListener(listener);
-        return listener;
     }
 }
 
