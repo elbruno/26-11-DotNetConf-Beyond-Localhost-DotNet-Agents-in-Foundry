@@ -13,6 +13,9 @@ using OpenTelemetry.Trace;
 var projectEndpoint = new Uri(DemoSettings.Read("FOUNDRY_PROJECT_ENDPOINT"));
 var deployment = DemoSettings.Read("AZURE_AI_MODEL_DEPLOYMENT_NAME");
 
+Console.WriteLine($"Project Endpoint: {projectEndpoint}");
+Console.WriteLine($"Deployment: {deployment}");
+
 AIAgent agent = new AIProjectClient(projectEndpoint, new DefaultAzureCredential())
     .AsAIAgent(
         model: deployment,
